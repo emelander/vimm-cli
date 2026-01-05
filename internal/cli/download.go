@@ -345,15 +345,17 @@ func runDownload(cfg *Config, args []string) int {
 		RefererBase:  client.BaseURL,
 	}
 
+	progress := newProgressManager(cfg, concurrency)
 	jobs := make(chan vault.ROMEntry)
 	results := make(chan downloadResult)
 	var wg sync.WaitGroup
 
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
+		workerID := i
 		go func() {
 			defer wg.Done()
-			workerDownload(ctx, client, opts, limiter, logger, jobs, results)
+			workerDownload(ctx, client, opts, limiter, logger, progress, workerID, jobs, results)
 		}()
 	}
 
@@ -399,6 +401,9 @@ func runDownload(cfg *Config, args []string) int {
 		if res.Verified {
 			verified++
 		}
+	}
+	if progress != nil {
+		progress.Stop()
 	}
 
 	summary := downloadSummary{
@@ -519,11 +524,11 @@ func selectDownloadTargets(ctx context.Context, client *vault.Client, system, qu
 	return results, 0, nil
 }
 
-func workerDownload(ctx context.Context, client *vault.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, jobs <-chan vault.ROMEntry, results chan<- downloadResult) {
+func workerDownload(ctx context.Context, client *vault.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, progress *progressManager, workerID int, jobs <-chan vault.ROMEntry, results chan<- downloadResult) {
 	httpClient := &http.Client{Timeout: opts.Timeout}
 	for entry := range jobs {
 		res := downloadResult{Entry: entry}
-		path, title, format, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, entry)
+		path, title, format, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, progress, workerID, entry)
 		res.Path = path
 		res.Skipped = skipped
 		res.Verified = verified
@@ -539,7 +544,7 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 	}
 }
 
-func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, string, bool, bool, bool, error) {
+func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, progress *progressManager, workerID int, entry vault.ROMEntry) (string, string, string, bool, bool, bool, error) {
 	media, expected, referer, title, downloadBase, downloadMethod, alt, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
 		return "", "", "", false, false, false, err
@@ -567,9 +572,20 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 		}
 	}
 
+	var tracker *progressTracker
+	if progress != nil {
+		tracker = progress.Start(workerID, entry.Title)
+		if tracker != nil {
+			defer tracker.Finish()
+		}
+	}
+
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, logger)
+		if tracker != nil {
+			tracker.Reset(entry.Title)
+		}
+		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, tracker, logger)
 		if err != nil {
 			return err
 		}
@@ -815,7 +831,7 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase, downloadMethod string, media vault.Media, outputPath, tmpDir string, resume bool, alt int, logger *downloadLogger) (string, error) {
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase, downloadMethod string, media vault.Media, outputPath, tmpDir string, resume bool, alt int, tracker *progressTracker, logger *downloadLogger) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
@@ -910,6 +926,15 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 	}
 	defer resp.Body.Close()
 
+	if tracker != nil {
+		if total := totalFromResponse(resp, resumeFrom); total > 0 {
+			tracker.SetTotal(total)
+		}
+		if resumeFrom > 0 {
+			tracker.SetCurrent(resumeFrom)
+		}
+	}
+
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return outputPath, err
 	}
@@ -924,7 +949,11 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, err
 	}
 
-	_, copyErr := io.Copy(out, resp.Body)
+	var reader io.Reader = resp.Body
+	if tracker != nil {
+		reader = &progressReader{reader: resp.Body, tracker: tracker}
+	}
+	_, copyErr := io.Copy(out, reader)
 	closeErr := out.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmpPath)
@@ -940,6 +969,53 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, err
 	}
 	return outputPath, nil
+}
+
+type progressReader struct {
+	reader  io.Reader
+	tracker *progressTracker
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		pr.tracker.Add(int64(n))
+	}
+	return n, err
+}
+
+func totalFromResponse(resp *http.Response, resumeFrom int64) int64 {
+	if resp == nil {
+		return 0
+	}
+	if value := resp.Header.Get("Content-Range"); value != "" {
+		if total := parseContentRangeTotal(value); total > 0 {
+			return total
+		}
+	}
+	if resp.ContentLength > 0 {
+		if resp.StatusCode == http.StatusPartialContent && resumeFrom > 0 {
+			return resp.ContentLength + resumeFrom
+		}
+		return resp.ContentLength
+	}
+	return 0
+}
+
+func parseContentRangeTotal(value string) int64 {
+	parts := strings.Split(value, "/")
+	if len(parts) != 2 {
+		return 0
+	}
+	totalStr := strings.TrimSpace(parts[1])
+	if totalStr == "*" || totalStr == "" {
+		return 0
+	}
+	total, err := strconv.ParseInt(totalStr, 10, 64)
+	if err != nil || total < 0 {
+		return 0
+	}
+	return total
 }
 
 var errAborted = errors.New("aborted")

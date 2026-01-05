@@ -43,11 +43,16 @@ values published in `Vimm’s Lair.txt` on each ROM page.
 ## Progress Indicators
 When running `vimm download` in TTY mode (and **not** `--plain`/`--json`), render live progress on stderr:
 - **Overall line (top):** aggregate progress across all downloads with a btop-style bar.
-  - Format: `Overall: XX% <progress bar> <speed> / <total size>`
+  - Format: `Overall <title padding> XX.X% [########...............] XXXX.X MB/s XXX.X/XXX.X GB ETA 00:00:00`
 - **Per-title lines (active only):** one line per currently-downloading title (bounded by concurrency).
-  - Format: `<title>: XX% <progress bar> <speed> / <title size>`
+  - Format: `<title padded to 40, ellipsis if truncated> XX.X% [########...............] XXXX.X MB/s XXX.X/XXX.X GB ETA 00:00:00`
 - Only show progress bars for currently active downloads (do not keep thousands of completed lines visible).
 - Progress bars should update in-place (no log spam).
+- Fixed widths:
+  - Title column: 40 chars (truncate with Unicode ellipsis).
+  - Bar width: 30 chars (use `#` filled and `.` empty).
+  - Speed width: fixed to `XXXX.X MB/s` (pad left).
+  - Size field: `XXX.X/XXX.X GB` or `XXX.X/XXX.X MB`, left-justified with no space after `/`.
 
 ## Exit Codes
 - `0` success
