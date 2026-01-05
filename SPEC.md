@@ -82,16 +82,17 @@ Flags:
 - `--region <code>` preferred region (default: USA, use `all` to disable)
 - `--include-variants <variants>` include excluded variants (comma-separated; default exclusions: `Virtual Console,LodgeNet`; use `all` to disable exclusions)
 
-Search results show the latest downloadable media title (if available), so region/revision tags are visible per vault ID.
-`vimm download --query` applies the same region/include tag filtering when choosing matches.
+Search results show the latest downloadable media title (if available), so region/revision/variant tags are visible per vault ID.
+`vimm download --query` applies the same region/include-variants filtering when choosing matches.
 
 Rules:
 - `auto`: if pattern contains glob chars (`*?[]`) → `glob`, else → `prefix`
 - Users should **quote** globs, e.g. `"*mario*"`
 
 Search output:
-- plain: `NAME<TAB>VAULT_ID<TAB>SYSTEM`
-- json: array of `{name, vault_id, system}`
+- plain: `TITLE<TAB>ID<TAB>SYSTEM`
+- json: array of `{ID, Title, System}`
+- default: aligned table with headers `TITLE ID SYSTEM`
 
 ## Download Selection
 `vimm download` selection flags are mutually exclusive:
