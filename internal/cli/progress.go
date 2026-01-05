@@ -18,15 +18,17 @@ const (
 )
 
 type progressManager struct {
-	writer    io.Writer
-	mu        sync.Mutex
-	slots     []progressSlot
-	doneBytes int64
-	doneTotal int64
-	started   time.Time
-	lastLines int
-	stopCh    chan struct{}
-	stopped   chan struct{}
+	writer     io.Writer
+	mu         sync.Mutex
+	slots      []progressSlot
+	doneBytes  int64
+	doneTotal  int64
+	doneItems  int
+	totalItems int
+	started    time.Time
+	lastLines  int
+	stopCh     chan struct{}
+	stopped    chan struct{}
 }
 
 type progressSlot struct {
@@ -43,7 +45,7 @@ type progressTracker struct {
 	slot int
 }
 
-func newProgressManager(cfg *Config, concurrency int) *progressManager {
+func newProgressManager(cfg *Config, concurrency int, totalItems int) *progressManager {
 	if cfg == nil || cfg.JSON || cfg.Plain || cfg.Quiet {
 		return nil
 	}
@@ -54,11 +56,12 @@ func newProgressManager(cfg *Config, concurrency int) *progressManager {
 		return nil
 	}
 	pm := &progressManager{
-		writer:  os.Stderr,
-		slots:   make([]progressSlot, concurrency),
-		started: time.Now(),
-		stopCh:  make(chan struct{}),
-		stopped: make(chan struct{}),
+		writer:     os.Stderr,
+		slots:      make([]progressSlot, concurrency),
+		started:    time.Now(),
+		totalItems: totalItems,
+		stopCh:     make(chan struct{}),
+		stopped:    make(chan struct{}),
 	}
 	go pm.run()
 	return pm
@@ -152,8 +155,18 @@ func (pm *progressManager) finishSlot(slot int) {
 		if entry.total > 0 {
 			pm.doneTotal += entry.total
 		}
+		pm.doneItems++
 	}
 	pm.slots[slot] = progressSlot{}
+	pm.mu.Unlock()
+}
+
+func (pm *progressManager) MarkDone() {
+	if pm == nil {
+		return
+	}
+	pm.mu.Lock()
+	pm.doneItems++
 	pm.mu.Unlock()
 }
 
@@ -182,6 +195,9 @@ func (pm *progressManager) snapshotLines() []string {
 	copy(slots, pm.slots)
 	doneBytes := pm.doneBytes
 	doneTotal := pm.doneTotal
+	doneItems := pm.doneItems
+	totalItems := pm.totalItems
+	started := pm.started
 	pm.mu.Unlock()
 
 	var lines []string
@@ -189,6 +205,7 @@ func (pm *progressManager) snapshotLines() []string {
 	var overallCurrent int64
 	var overallTotal int64
 	var overallSpeed float64
+	progressItems := float64(doneItems)
 	for _, slot := range slots {
 		if !slot.active {
 			continue
@@ -196,13 +213,14 @@ func (pm *progressManager) snapshotLines() []string {
 		overallCurrent += slot.current
 		if slot.total > 0 {
 			overallTotal += slot.total
+			progressItems += float64(slot.current) / float64(slot.total)
 		}
 		overallSpeed += slotSpeed(slot, now)
 	}
 	overallCurrent += doneBytes
 	overallTotal += doneTotal
 
-	lines = append(lines, formatProgressLine("Overall", overallCurrent, overallTotal, overallSpeed, now, time.Time{}))
+	lines = append(lines, formatOverallLine("Overall", progressItems, doneItems, totalItems, overallSpeed, now, started))
 	for _, slot := range slots {
 		if !slot.active {
 			continue
@@ -276,6 +294,35 @@ func formatProgressLine(title string, current, total int64, speed float64, now t
 	bar := formatBar(percent, progressBarWidth)
 	speedStr := formatSpeed(speed)
 	sizeStr, eta := formatSizeAndETA(current, total, speed)
+	return fmt.Sprintf("%s %5.1f%% [%s] %s %-*s ETA %s", title, percent, bar, speedStr, progressSizeWidth, sizeStr, eta)
+}
+
+func formatOverallLine(title string, progress float64, doneItems, totalItems int, speed float64, now time.Time, started time.Time) string {
+	title = formatTitle(title, progressTitleWidth)
+	percent := 0.0
+	if totalItems > 0 {
+		percent = (progress / float64(totalItems)) * 100
+		if percent > 100 {
+			percent = 100
+		}
+	}
+	bar := formatBar(percent, progressBarWidth)
+	speedStr := formatSpeed(speed)
+	sizeStr := fmt.Sprintf("%d/%d", doneItems, totalItems)
+	eta := "--:--:--"
+	if totalItems > 0 {
+		elapsed := now.Sub(started).Seconds()
+		if elapsed > 0 {
+			rate := progress / elapsed
+			if rate > 0 {
+				remaining := float64(totalItems) - progress
+				if remaining < 0 {
+					remaining = 0
+				}
+				eta = formatETA(remaining / rate)
+			}
+		}
+	}
 	return fmt.Sprintf("%s %5.1f%% [%s] %s %-*s ETA %s", title, percent, bar, speedStr, progressSizeWidth, sizeStr, eta)
 }
 

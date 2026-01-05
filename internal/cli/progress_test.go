@@ -32,3 +32,10 @@ func TestFormatProgressLineIncludesETA(t *testing.T) {
 		t.Fatalf("expected ETA in line, got %q", line)
 	}
 }
+
+func TestFormatOverallLineIncludesCounts(t *testing.T) {
+	line := formatOverallLine("Overall", 1.5, 1, 4, 0, time.Now(), time.Now().Add(-time.Second))
+	if !strings.Contains(line, "1/4") {
+		t.Fatalf("expected counts in line, got %q", line)
+	}
+}

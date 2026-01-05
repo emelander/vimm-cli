@@ -393,7 +393,7 @@ func runDownload(cfg *Config, args []string) int {
 		RefererBase:    client.BaseURL,
 	}
 
-	progress := newProgressManager(cfg, concurrency)
+	progress := newProgressManager(cfg, concurrency, len(entries))
 	jobs := make(chan vault.ROMEntry)
 	results := make(chan downloadResult)
 	var wg sync.WaitGroup
@@ -618,6 +618,9 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 			res.Title = title
 		} else if entry.Title != "" {
 			res.Title = entry.Title
+		}
+		if skipped && progress != nil {
+			progress.MarkDone()
 		}
 		results <- res
 	}
@@ -1007,6 +1010,12 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 			break
 		}
 		resp.Body.Close()
+		if m == http.MethodGet && method == http.MethodPost {
+			if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusBadRequest {
+				continue
+			}
+			return outputPath, fmt.Errorf("download failed: %s", resp.Status)
+		}
 		if i == len(methods)-1 {
 			return outputPath, fmt.Errorf("download failed: %s", resp.Status)
 		}
