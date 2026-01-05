@@ -89,6 +89,7 @@ type downloadResult struct {
 	Verified     bool
 	VerifyFailed bool
 	Err          error
+	Title        string
 }
 
 func runDownload(cfg *Config, args []string) int {
@@ -304,7 +305,17 @@ func runDownload(cfg *Config, args []string) int {
 
 	var downloaded, skipped, failed, verified int
 	verifyFailed := false
+	var items []downloadItem
 	for res := range results {
+		items = append(items, downloadItem{
+			ID:       res.Entry.ID,
+			Title:    res.Title,
+			System:   res.Entry.System,
+			Path:     res.Path,
+			Skipped:  res.Skipped,
+			Verified: res.Verified,
+			Error:    errString(res.Err),
+		})
 		if res.Err != nil {
 			failed++
 			if res.VerifyFailed {
@@ -323,7 +334,17 @@ func runDownload(cfg *Config, args []string) int {
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "downloaded=%d skipped=%d failed=%d verified=%d\n", downloaded, skipped, failed, verified)
+	summary := downloadSummary{
+		Downloaded: downloaded,
+		Skipped:    skipped,
+		Failed:     failed,
+		Verified:   verified,
+		Items:      items,
+	}
+	if err := outputDownloadSummary(cfg, summary); err != nil {
+		printError(os.Stderr, err)
+		return exitGeneric
+	}
 
 	if failed > 0 {
 		if verifyFailed {
@@ -425,20 +446,28 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 	httpClient := &http.Client{Timeout: opts.Timeout}
 	for entry := range jobs {
 		res := downloadResult{Entry: entry}
-		path, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, entry)
+		path, title, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, entry)
 		res.Path = path
 		res.Skipped = skipped
 		res.Verified = verified
 		res.VerifyFailed = verifyFailed
 		res.Err = err
+		if title != "" {
+			res.Title = title
+		} else if entry.Title != "" {
+			res.Title = entry.Title
+		}
 		results <- res
 	}
 }
 
-func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, bool, bool, bool, error) {
-	media, expected, referer, err := prepareMedia(ctx, client, entry.ID, opts)
+func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, bool, bool, bool, error) {
+	media, expected, referer, title, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
-		return "", false, false, false, err
+		return "", "", false, false, false, err
+	}
+	if entry.Title == "" && title != "" {
+		entry.Title = title
 	}
 
 	zipName := zipNameFromMedia(media)
@@ -450,11 +479,11 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	if !opts.Overwrite {
 		if _, err := os.Stat(outputPath); err == nil {
 			if !opts.Verify {
-				return outputPath, true, false, false, nil
+				return outputPath, entry.Title, true, false, false, nil
 			}
 			logger.verbosef("verifying existing %s\n", outputPath)
 			if err := verifyZip(outputPath, expected, opts.StrictHashes); err == nil {
-				return outputPath, true, true, false, nil
+				return outputPath, entry.Title, true, true, false, nil
 			}
 		}
 	}
@@ -479,21 +508,21 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	err = withRetries(attempt, opts.Retries, opts.RetryBackoff)
 	if err != nil {
-		return outputPath, false, false, verifyFailed, err
+		return outputPath, entry.Title, false, false, verifyFailed, err
 	}
-	return outputPath, false, opts.Verify, false, nil
+	return outputPath, entry.Title, false, opts.Verify, false, nil
 }
 
-func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, error) {
+func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, error) {
 	mediaList, err := client.ROMMedia(ctx, id)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", err
+		return vault.Media{}, vault.Hashes{}, "", "", err
 	}
 	selected, err := selectMedia(mediaList, opts.Latest, opts.Revision)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", err
+		return vault.Media{}, vault.Hashes{}, "", "", err
 	}
-	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), nil
+	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), nil
 }
 
 func selectMedia(media []vault.Media, latest bool, revision string) (vault.Media, error) {
@@ -710,6 +739,13 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, err
 	}
 	return outputPath, nil
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func verifyZip(path string, expected vault.Hashes, strict bool) error {
