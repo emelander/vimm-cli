@@ -15,11 +15,11 @@ import (
 const verifyUsage = `vimm verify - verify local ROMs
 
 USAGE:
-  vimm verify --system <slug> [--query <pattern>] --output-dir <path>
+  vimm verify --system <code> [--query <pattern>] --output-dir <path>
   vimm verify --id <vault_id> [--id <vault_id> ...] --output-dir <path>
 
 FLAGS:
-  --system <slug>               System vault slug
+  --system <code>               System code
   --id <vault_id>               Verify specific ROMs by id (repeatable)
   --query <pattern>             Search pattern (quote globs like "*mario*")
   --match <auto|glob|prefix|contains|regex>  Match mode (default: auto)
@@ -41,7 +41,7 @@ func runVerify(cfg *Config, args []string) int {
 
 	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&system, "system", "", "system slug")
+	fs.StringVar(&system, "system", "", "system code")
 	fs.Var(&stringSliceFlag{values: &ids}, "id", "vault id (repeatable)")
 	fs.StringVar(&query, "query", "", "search query")
 	fs.StringVar(&match, "match", "auto", "match mode")

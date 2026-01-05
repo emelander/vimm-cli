@@ -29,12 +29,12 @@ import (
 const downloadUsage = `vimm download - download and verify ROMs
 
 USAGE:
-  vimm download --system <slug> --query <pattern>
-  vimm download --system <slug> --all
+  vimm download --system <code> --query <pattern>
+  vimm download --system <code> --all
   vimm download --id <vault_id> [--id <vault_id> ...]
 
 SELECTION FLAGS:
-  --system <slug>               System vault slug (required for --query or --all)
+  --system <code>               System code (required for --query or --all)
   --query <pattern>             Search pattern (quote globs like "*mario*")
   --match <auto|glob|prefix|contains|regex>  Match mode (default: auto)
   --all                         Download all titles for system
@@ -160,7 +160,7 @@ func runDownload(cfg *Config, args []string) int {
 
 	fs := flag.NewFlagSet("download", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&system, "system", "", "system slug")
+	fs.StringVar(&system, "system", "", "system code")
 	fs.StringVar(&query, "query", "", "search query")
 	fs.StringVar(&match, "match", "auto", "match mode")
 	fs.BoolVar(&all, "all", false, "download all")

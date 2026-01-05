@@ -11,7 +11,7 @@ USAGE:
   vimm [global flags] <subcommand> [flags]
 
 SUBCOMMANDS:
-  systems     List available systems and vault slugs
+  systems     List available systems and codes
   search      Search ROMs by name pattern
   download    Download and verify ROMs
   verify      Re-verify local ROMs

@@ -28,16 +28,16 @@ go install github.com/emelander/vimm-download/cmd/vimm@latest
 # List systems
 ./vimm systems
 
-# Search within a system
+# Search within a system code
 ./vimm search --system N64 --query "*mario*"
 
 # Download a few matches
 ./vimm download --system N64 --query "*mario*" --output-dir ./roms
 
-# Download all ROMs for a system (confirmation required)
+# Download all ROMs for a system code (confirmation required)
 ./vimm download --system N64 --all
 
-# Verify local files
+# Verify local files by system code
 ./vimm verify --system N64 --output-dir ./roms --query "*fox*"
 ```
 

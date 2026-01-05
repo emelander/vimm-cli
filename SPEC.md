@@ -19,7 +19,7 @@ values published in `Vimm’s Lair.txt` on each ROM page.
 - Downloading content you do not own.
 
 ## Command Tree
-- `vimm systems` — list available systems and vault slugs
+- `vimm systems` — list available systems and system codes
 - `vimm search` — search ROMs by name pattern
 - `vimm download` — download + verify ROMs
 - `vimm verify` — re-verify local ROMs
@@ -64,11 +64,12 @@ When running `vimm download` in TTY mode (and **not** `--plain`/`--json`), rende
 - `6` partial success (some downloads failed)
 
 ## Systems
-Systems are identified by vault slugs (e.g., `N64` for `https://vimm.net/vault/N64`).
+Systems are identified by system codes (vault slugs), e.g., `N64` for `https://vimm.net/vault/N64`.
 
 `vimm systems` output:
-- plain: `SLUG<TAB>NAME<TAB>CLASS<TAB>TITLES`
+- plain: `CODE<TAB>NAME<TAB>CLASS<TAB>TITLES`
 - json: array of `{slug,name,class,titles}`
+- default: aligned table with headers `CODE NAME CLASS TITLES`
 
 ## Search Semantics
 `vimm search` and `vimm download --query` share matching rules:
@@ -88,8 +89,8 @@ Search output:
 ## Download Selection
 `vimm download` selection flags are mutually exclusive:
 - `--id <vault_id>` (repeatable)
-- `--system <slug> --query <pattern>`
-- `--system <slug> --all`
+- `--system <code> --query <pattern>`
+- `--system <code> --all`
 
 ## Download Robustness
 Flags:

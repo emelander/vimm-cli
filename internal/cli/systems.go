@@ -12,7 +12,7 @@ import (
 	"vimm-download/internal/vault"
 )
 
-const systemsUsage = `vimm systems - list available systems
+const systemsUsage = `vimm systems - list available systems and codes
 
 USAGE:
   vimm systems [--class <console|handheld>]
@@ -104,8 +104,40 @@ func runSystems(cfg *Config, args []string) int {
 		return exitOK
 	}
 
+	if cfg.Plain {
+		for _, sys := range systems {
+			fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%d\n", sys.Slug, sys.Name, sys.Class, sys.Titles)
+		}
+		return exitOK
+	}
+
+	codeHeader := "CODE"
+	nameHeader := "NAME"
+	classHeader := "CLASS"
+	titlesHeader := "TITLES"
+	codeWidth := len(codeHeader)
+	nameWidth := len(nameHeader)
+	classWidth := len(classHeader)
+	titlesWidth := len(titlesHeader)
 	for _, sys := range systems {
-		fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%d\n", sys.Slug, sys.Name, sys.Class, sys.Titles)
+		if len(sys.Slug) > codeWidth {
+			codeWidth = len(sys.Slug)
+		}
+		if len(sys.Name) > nameWidth {
+			nameWidth = len(sys.Name)
+		}
+		if len(sys.Class) > classWidth {
+			classWidth = len(sys.Class)
+		}
+		titlesLen := len(fmt.Sprintf("%d", sys.Titles))
+		if titlesLen > titlesWidth {
+			titlesWidth = titlesLen
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "%-*s  %-*s  %-*s  %*s\n", codeWidth, codeHeader, nameWidth, nameHeader, classWidth, classHeader, titlesWidth, titlesHeader)
+	for _, sys := range systems {
+		fmt.Fprintf(os.Stdout, "%-*s  %-*s  %-*s  %*d\n", codeWidth, sys.Slug, nameWidth, sys.Name, classWidth, sys.Class, titlesWidth, sys.Titles)
 	}
 	return exitOK
 }

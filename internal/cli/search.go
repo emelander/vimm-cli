@@ -14,11 +14,11 @@ import (
 const searchUsage = `vimm search - search ROMs by name pattern
 
 USAGE:
-  vimm search --system <slug> --query <pattern>
+  vimm search --system <code> --query <pattern>
   vimm search --class <console|handheld> --query <pattern>
 
 FLAGS:
-  --system <slug>               System vault slug (e.g., N64)
+  --system <code>               System code (e.g., N64)
   --class <console|handheld>    Search across system class
   --query <pattern>             Search pattern (quote globs like "*mario*")
   --match <auto|glob|prefix|contains|regex>  Match mode (default: auto)
@@ -39,7 +39,7 @@ func runSearch(cfg *Config, args []string) int {
 	)
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&system, "system", "", "system slug")
+	fs.StringVar(&system, "system", "", "system code")
 	fs.StringVar(&class, "class", "", "system class")
 	fs.StringVar(&query, "query", "", "search query")
 	fs.StringVar(&match, "match", "auto", "match mode")

@@ -130,11 +130,11 @@ _vimm() {
     systems)
       _arguments "--class[Filter by system class]" "--help[Show help]" ;;
     search)
-      _arguments "--system[System vault slug]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--help[Show help]" ;;
     download)
-      _arguments "--system[System vault slug]" "--query[Search pattern]" "--match[Match mode]" "--all[Download all]" "--id[Vault id]" "--output-dir[Output directory]" "--tmp-dir[Temp directory]" "-c[Concurrency]" "--concurrency[Concurrency]" "--retries[Retries]" "--retry-backoff[Retry strategy]" "--timeout[Timeout]" "--max-rps[Rate limit]" "--resume[Resume]" "--overwrite[Overwrite]" "--dry-run[Dry run]" "--latest[Prefer latest]" "--revision[Revision override]" "--verify[Verify hashes]" "--skip-verify[Skip verification]" "--strict-hashes[Strict hashes]" "--count-check[Count check]" "--strict-count[Strict count]" "--allow-mismatch[Allow mismatch]" "--force[Skip confirmation]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--query[Search pattern]" "--match[Match mode]" "--all[Download all]" "--id[Vault id]" "--output-dir[Output directory]" "--tmp-dir[Temp directory]" "-c[Concurrency]" "--concurrency[Concurrency]" "--retries[Retries]" "--retry-backoff[Retry strategy]" "--timeout[Timeout]" "--max-rps[Rate limit]" "--resume[Resume]" "--overwrite[Overwrite]" "--dry-run[Dry run]" "--latest[Prefer latest]" "--revision[Revision override]" "--verify[Verify hashes]" "--skip-verify[Skip verification]" "--strict-hashes[Strict hashes]" "--count-check[Count check]" "--strict-count[Strict count]" "--allow-mismatch[Allow mismatch]" "--force[Skip confirmation]" "--help[Show help]" ;;
     verify)
-      _arguments "--system[System vault slug]" "--id[Vault id]" "--query[Search pattern]" "--match[Match mode]" "--output-dir[Output directory]" "--strict-hashes[Strict hashes]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--id[Vault id]" "--query[Search pattern]" "--match[Match mode]" "--output-dir[Output directory]" "--strict-hashes[Strict hashes]" "--help[Show help]" ;;
     completion)
       _arguments "1: :((bash zsh fish powershell))" "--help[Show help]" ;;
   esac
@@ -145,13 +145,13 @@ compdef _vimm vimm
 const fishCompletion = `# fish completion for vimm
 complete -c vimm -f -n '__fish_use_subcommand' -a 'systems search download verify completion help'
 complete -c vimm -n '__fish_seen_subcommand_from systems' -l class -d 'Filter by system class'
-complete -c vimm -n '__fish_seen_subcommand_from search' -l system -d 'System vault slug'
+complete -c vimm -n '__fish_seen_subcommand_from search' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l class -d 'System class'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l query -d 'Search pattern'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l match -d 'Match mode'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l limit -d 'Limit results'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l offset -d 'Offset results'
-complete -c vimm -n '__fish_seen_subcommand_from download' -l system -d 'System vault slug'
+complete -c vimm -n '__fish_seen_subcommand_from download' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l query -d 'Search pattern'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l match -d 'Match mode'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l all -d 'Download all'
@@ -175,7 +175,7 @@ complete -c vimm -n '__fish_seen_subcommand_from download' -l count-check -d 'Co
 complete -c vimm -n '__fish_seen_subcommand_from download' -l strict-count -d 'Strict count'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l allow-mismatch -d 'Allow mismatch'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l force -d 'Skip confirmation'
-complete -c vimm -n '__fish_seen_subcommand_from verify' -l system -d 'System vault slug'
+complete -c vimm -n '__fish_seen_subcommand_from verify' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from verify' -l id -d 'Vault id'
 complete -c vimm -n '__fish_seen_subcommand_from verify' -l query -d 'Search pattern'
 complete -c vimm -n '__fish_seen_subcommand_from verify' -l match -d 'Match mode'
