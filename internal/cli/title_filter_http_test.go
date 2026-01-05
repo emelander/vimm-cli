@@ -44,7 +44,7 @@ func TestFilterSearchResultsUsesLatestAndRegion(t *testing.T) {
 		IncludeAllTags: false,
 	}
 
-	filtered, err := filterSearchResults(context.Background(), client, results, filters, 0, -1)
+	filtered, err := filterSearchResults(context.Background(), client, results, filters, 0, -1, nil)
 	if err != nil {
 		t.Fatalf("filterSearchResults error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestFilterSearchResultsIncludeVariants(t *testing.T) {
 		IncludeAllTags: false,
 	}
 
-	filtered, err := filterSearchResults(context.Background(), client, results, filters, 0, -1)
+	filtered, err := filterSearchResults(context.Background(), client, results, filters, 0, -1, nil)
 	if err != nil {
 		t.Fatalf("filterSearchResults error: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestFilterSearchResultsErrorOnROMPageFailure(t *testing.T) {
 		IncludeAllTags: false,
 	}
 
-	if _, err := filterSearchResults(context.Background(), client, results, filters, 0, -1); err == nil {
+	if _, err := filterSearchResults(context.Background(), client, results, filters, 0, -1, nil); err == nil {
 		t.Fatalf("expected error on ROMPage failure")
 	}
 }

@@ -79,12 +79,13 @@ var knownRegions = map[string]struct{}{
 	"finland":     {},
 }
 
-func filterSearchResults(ctx context.Context, client *vault.Client, results []vault.ROMEntry, filters titleFilters, offset, limit int) ([]vault.ROMEntry, error) {
+func filterSearchResults(ctx context.Context, client *vault.Client, results []vault.ROMEntry, filters titleFilters, offset, limit int, progress func(done, total int)) ([]vault.ROMEntry, error) {
 	if limit == 0 {
 		return nil, nil
 	}
 	filtered := make([]vault.ROMEntry, 0, len(results))
 	skipped := 0
+	total := len(results)
 	for _, entry := range results {
 		displayTitle, err := resolveLatestMediaTitle(ctx, client, entry.ID)
 		if err != nil {
@@ -101,9 +102,15 @@ func filterSearchResults(ctx context.Context, client *vault.Client, results []va
 		}
 		if skipped < offset {
 			skipped++
+			if progress != nil {
+				progress(skipped+len(filtered), total)
+			}
 			continue
 		}
 		filtered = append(filtered, entry)
+		if progress != nil {
+			progress(skipped+len(filtered), total)
+		}
 		if limit > 0 && len(filtered) >= limit {
 			break
 		}

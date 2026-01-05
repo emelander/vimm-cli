@@ -307,8 +307,16 @@ func runDownload(cfg *Config, args []string) int {
 	applyFilters := filtersActive && (query != "" || all)
 
 	if all && applyFilters {
-		logger.printf("filtering %d titles for region/variants (this can take a while)...\n", len(entries))
-		filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
+		spinner := newSpinner(logger, fmt.Sprintf("filtering titles for region/variants"), len(entries))
+		progressFn := func(done, total int) {
+			if spinner != nil {
+				spinner.Update(done, "")
+			}
+		}
+		filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1, progressFn)
+		if spinner != nil {
+			spinner.Finish(fmt.Sprintf("filtered titles %d/%d", len(entries), len(entries)))
+		}
 		if err != nil {
 			printError(os.Stderr, err)
 			return exitNetwork
@@ -332,7 +340,7 @@ func runDownload(cfg *Config, args []string) int {
 	if dryRun {
 		entriesForOutput := entries
 		if applyFilters && !all {
-			filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
+			filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1, nil)
 			if err != nil {
 				printError(os.Stderr, err)
 				return exitNetwork
@@ -530,6 +538,72 @@ func (l *downloadLogger) verbosef(format string, args ...any) {
 	fmt.Fprint(os.Stderr, msg)
 }
 
+type spinner struct {
+	writer  io.Writer
+	prefix  string
+	total   int
+	frames  []string
+	index   int
+	lastLen int
+	lastAt  time.Time
+	enabled bool
+}
+
+func newSpinner(logger *downloadLogger, prefix string, total int) *spinner {
+	if logger == nil || logger.cfg == nil || logger.cfg.Quiet || logger.cfg.JSON || logger.cfg.Plain {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stderr.Fd())) {
+		return nil
+	}
+	if total <= 0 {
+		return nil
+	}
+	return &spinner{
+		writer:  os.Stderr,
+		prefix:  strings.TrimSpace(prefix),
+		total:   total,
+		frames:  []string{"-", "\\", "|", "/"},
+		enabled: true,
+	}
+}
+
+func (s *spinner) Update(done int, label string) {
+	if s == nil || !s.enabled {
+		return
+	}
+	now := time.Now()
+	if now.Sub(s.lastAt) < 120*time.Millisecond && done < s.total {
+		return
+	}
+	s.lastAt = now
+	frame := s.frames[s.index%len(s.frames)]
+	s.index++
+	line := fmt.Sprintf("%s %s %d/%d", frame, s.prefix, done, s.total)
+	label = strings.TrimSpace(label)
+	if label != "" {
+		line = fmt.Sprintf("%s (%s)", line, label)
+	}
+	if pad := s.lastLen - len([]rune(line)); pad > 0 {
+		line += strings.Repeat(" ", pad)
+	}
+	s.lastLen = len([]rune(line))
+	_, _ = fmt.Fprintf(s.writer, "\r%s", line)
+}
+
+func (s *spinner) Finish(final string) {
+	if s == nil || !s.enabled {
+		return
+	}
+	if strings.TrimSpace(final) == "" {
+		final = fmt.Sprintf("%s %d/%d", s.prefix, s.total, s.total)
+	}
+	if pad := s.lastLen - len([]rune(final)); pad > 0 {
+		final += strings.Repeat(" ", pad)
+	}
+	_, _ = fmt.Fprintf(s.writer, "\r%s\n", final)
+}
+
 func selectDownloadTargets(ctx context.Context, client *vault.Client, logger *downloadLogger, system, query, match string, all bool, ids []string) ([]vault.ROMEntry, int, error) {
 	if len(ids) > 0 {
 		entries := make([]vault.ROMEntry, 0, len(ids))
@@ -601,6 +675,7 @@ func listAllWithProgress(ctx context.Context, client *vault.Client, logger *down
 	}
 
 	total := len(sections)
+	spinner := newSpinner(logger, fmt.Sprintf("listing %s section", slug), total)
 	entries := make([]vault.ROMEntry, 0, 1024)
 	seen := make(map[int]struct{})
 	for i, section := range sections {
@@ -608,7 +683,11 @@ func listAllWithProgress(ctx context.Context, client *vault.Client, logger *down
 		if section == "number" {
 			label = "#"
 		}
-		logger.printf("listing %s section %d/%d (%s)\n", slug, i+1, total, label)
+		if spinner != nil {
+			spinner.Update(i+1, label)
+		} else {
+			logger.printf("listing %s section %d/%d (%s)\n", slug, i+1, total, label)
+		}
 		sectionEntries, err := client.ListSection(ctx, slug, section)
 		if err != nil {
 			return nil, err
@@ -620,6 +699,9 @@ func listAllWithProgress(ctx context.Context, client *vault.Client, logger *down
 			seen[entry.ID] = struct{}{}
 			entries = append(entries, entry)
 		}
+	}
+	if spinner != nil {
+		spinner.Finish(fmt.Sprintf("listed %s sections %d/%d", slug, total, total))
 	}
 	logger.printf("found %d titles for %s\n", len(entries), slug)
 	return entries, nil

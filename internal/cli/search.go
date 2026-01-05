@@ -164,7 +164,7 @@ func runSearch(cfg *Config, args []string) int {
 		IncludeTags:    includeList,
 		IncludeAllTags: includeAll,
 	}
-	filtered, err := filterSearchResults(ctx, client, results, filters, offset, limit)
+	filtered, err := filterSearchResults(ctx, client, results, filters, offset, limit, nil)
 	if err != nil {
 		printError(os.Stderr, err)
 		return exitNetwork
