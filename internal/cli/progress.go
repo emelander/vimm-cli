@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	progressTitleWidth = 40
+	progressTitleWidth = 30
 	progressBarWidth   = 30
 	progressSizeWidth  = 14
 )
@@ -39,6 +39,7 @@ type progressSlot struct {
 	startBytes int64
 	started    time.Time
 	active     bool
+	status     string
 }
 
 type progressTracker struct {
@@ -134,6 +135,15 @@ func (pt *progressTracker) Add(delta int64) {
 	pt.pm.mu.Unlock()
 }
 
+func (pt *progressTracker) SetStatus(status string) {
+	if pt == nil || pt.pm == nil {
+		return
+	}
+	pt.pm.mu.Lock()
+	pt.pm.slots[pt.slot].status = strings.TrimSpace(status)
+	pt.pm.mu.Unlock()
+}
+
 func (pt *progressTracker) Finish() {
 	if pt == nil || pt.pm == nil {
 		return
@@ -158,7 +168,16 @@ func (pm *progressManager) finishSlot(slot int) {
 		}
 		pm.doneItems++
 	}
-	pm.slots[slot] = progressSlot{}
+	if entry.status != "" {
+		entry.current = 0
+		entry.total = 0
+		entry.startBytes = 0
+		entry.started = time.Time{}
+		entry.active = true
+		pm.slots[slot] = entry
+	} else {
+		pm.slots[slot] = progressSlot{}
+	}
 	pm.mu.Unlock()
 }
 
@@ -226,7 +245,7 @@ func (pm *progressManager) snapshotLines() []string {
 		if !slot.active {
 			continue
 		}
-		lines = append(lines, formatProgressLine(slot.title, slot.current, slot.total, slotSpeed(slot, now), now, slot.started))
+		lines = append(lines, formatProgressLine(slot.title, slot.current, slot.total, slotSpeed(slot, now), now, slot.started, slot.status))
 	}
 	return lines
 }
@@ -318,7 +337,7 @@ func (pm *progressManager) PrintLine(line string) {
 	pm.writeLinesLocked(lines)
 }
 
-func formatProgressLine(title string, current, total int64, speed float64, now time.Time, started time.Time) string {
+func formatProgressLine(title string, current, total int64, speed float64, now time.Time, started time.Time, status string) string {
 	title = formatTitle(title, progressTitleWidth)
 	percent := 0.0
 	if total > 0 {
@@ -330,7 +349,11 @@ func formatProgressLine(title string, current, total int64, speed float64, now t
 	bar := formatBar(percent, progressBarWidth)
 	speedStr := formatSpeed(speed)
 	sizeStr, eta := formatSizeAndETA(current, total, speed)
-	return fmt.Sprintf("%s %5.1f%% [%s] %s %-*s ETA %s", title, percent, bar, speedStr, progressSizeWidth, sizeStr, eta)
+	tail := "ETA " + eta
+	if status != "" {
+		tail = status
+	}
+	return fmt.Sprintf("%s %5.1f%% [%s] %s %-*s %s", title, percent, bar, speedStr, progressSizeWidth, sizeStr, tail)
 }
 
 func formatOverallLine(title string, progress float64, doneItems, totalItems int, speed float64, now time.Time, started time.Time) string {
@@ -395,7 +418,7 @@ func formatSpeed(bytesPerSecond float64) string {
 	if mb > 9999.9 {
 		mb = 9999.9
 	}
-	return fmt.Sprintf("%6.1f MB/s", mb)
+	return padRight(fmt.Sprintf("%.1f MB/s", mb), 11)
 }
 
 func formatSizeAndETA(current, total int64, speed float64) (string, string) {

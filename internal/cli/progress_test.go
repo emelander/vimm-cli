@@ -27,7 +27,7 @@ func TestFormatBarWidth(t *testing.T) {
 }
 
 func TestFormatProgressLineIncludesETA(t *testing.T) {
-	line := formatProgressLine("Game", 50, 100, 1024*1024, time.Now(), time.Now().Add(-time.Second))
+	line := formatProgressLine("Game", 50, 100, 1024*1024, time.Now(), time.Now().Add(-time.Second), "")
 	if !strings.Contains(line, "ETA") {
 		t.Fatalf("expected ETA in line, got %q", line)
 	}

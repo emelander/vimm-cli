@@ -423,6 +423,7 @@ func runDownload(cfg *Config, args []string) int {
 	var downloaded, skipped, failed, verified int
 	verifyFailed := false
 	var items []downloadItem
+	var failureLines []string
 	for res := range results {
 		items = append(items, downloadItem{
 			ID:       res.Entry.ID,
@@ -439,7 +440,12 @@ func runDownload(cfg *Config, args []string) int {
 			if res.VerifyFailed {
 				verifyFailed = true
 			}
-			logger.printf("failed %d: %v\n", res.Entry.ID, res.Err)
+			msg := fmt.Sprintf("failed %d: %v", res.Entry.ID, res.Err)
+			if progress != nil {
+				failureLines = append(failureLines, msg)
+			} else {
+				logger.printf("%s\n", msg)
+			}
 			continue
 		}
 		if res.Skipped {
@@ -453,6 +459,10 @@ func runDownload(cfg *Config, args []string) int {
 	}
 	if progress != nil {
 		progress.Stop()
+		logger.progress = nil
+		for _, msg := range failureLines {
+			logger.printf("%s\n", msg)
+		}
 	}
 
 	summary := downloadSummary{
@@ -690,13 +700,21 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 		if tracker != nil {
 			tracker.Reset(entry.Title)
 		}
+		setStatus := func(err error) {
+			if err == nil || tracker == nil {
+				return
+			}
+			tracker.SetStatus(fmt.Sprintf("failed %d: %v", entry.ID, err))
+		}
 		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, tracker, logger)
 		if err != nil {
+			setStatus(err)
 			return err
 		}
 		outputPath = path
 		if opts.Verify {
 			if err := verifyZip(outputPath, expected, opts.StrictHashes); err != nil {
+				setStatus(err)
 				verifyFailed = true
 				_ = os.Remove(outputPath)
 				return err
