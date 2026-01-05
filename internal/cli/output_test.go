@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 func TestOutputSearchResultsHeader(t *testing.T) {

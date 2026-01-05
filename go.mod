@@ -1,4 +1,4 @@
-module vimm-download
+module vimm-cli
 
 go 1.25
 

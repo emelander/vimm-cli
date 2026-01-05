@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 func TestStarFox64DownloadEndpoint(t *testing.T) {

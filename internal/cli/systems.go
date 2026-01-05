@@ -9,7 +9,7 @@ import (
 	"os"
 	"sort"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 const systemsUsage = `vimm systems - list available systems and codes

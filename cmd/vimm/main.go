@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"vimm-download/internal/cli"
+	"vimm-cli/internal/cli"
 )
 
 func main() {

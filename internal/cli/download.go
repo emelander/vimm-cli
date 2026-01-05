@@ -23,7 +23,7 @@ import (
 
 	"golang.org/x/term"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 const downloadUsage = `vimm download - download and verify ROMs

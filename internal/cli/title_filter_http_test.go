@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 func TestFilterSearchResultsUsesLatestAndRegion(t *testing.T) {

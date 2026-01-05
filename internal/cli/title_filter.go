@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"vimm-download/internal/vault"
+	"vimm-cli/internal/vault"
 )
 
 type titleFilters struct {

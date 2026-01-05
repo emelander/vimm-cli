@@ -21,7 +21,7 @@ go build -o vimm ./cmd/vimm
 Or install directly with Go:
 
 ```bash
-go install github.com/emelander/vimm-download/cmd/vimm@latest
+go install github.com/emelander/vimm-cli/cmd/vimm@latest
 ```
 
 ### Usage
