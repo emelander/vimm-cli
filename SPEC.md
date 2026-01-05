@@ -83,7 +83,7 @@ Flags:
 - `--include-variants <variants>` include excluded variants (comma-separated; default exclusions: `Virtual Console,LodgeNet`; use `all` to disable exclusions)
 
 Search results show the latest downloadable media title (if available), so region/revision/variant tags are visible per vault ID.
-`vimm download --query` and `vimm download --all` apply the same region/include-variants filtering when choosing matches.
+`vimm download --query` and `vimm download --all` apply the same region/include-variants filtering when choosing matches (filters are ignored for `--id` downloads).
 
 Rules:
 - `auto`: if pattern contains glob chars (`*?[]`) → `glob`, else → `prefix`
@@ -113,6 +113,9 @@ Flags:
 - `--overwrite` always re-download
 - `--dry-run` plan only
 
+Download format selection:
+- Uses the site-selected download format when available, otherwise falls back to standard.
+
 ## Version Selection
 Default behavior is `--latest`:
 - Prefer highest revision number when present.
@@ -127,6 +130,7 @@ Default behavior is `--verify`:
 - Parse CRC/MD5/SHA1 from `Vimm’s Lair.txt` on the ROM page.
 - Verify the downloaded file against all three hashes.
 - Missing hashes are a failure when `--strict-hashes` is enabled (default).
+- Verification supports ZIP and 7z archives (auto-detected).
 
 Flags:
 - `--verify` (default: true)
