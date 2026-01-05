@@ -8,6 +8,7 @@
 - Concurrent downloads with retries, rate limiting, and resume
 - Automatically uses the format selected by the site when multiple formats are offered
 - CRC/MD5/SHA1 verification using `Vimm’s Lair.txt`
+- Existing files are always checksum-verified before skipping
 - Region filtering with variant-based excludes (defaults to USA, excludes Virtual Console and LodgeNet; use `--include-variants` to allow them)
 - JSON or plain text output
 

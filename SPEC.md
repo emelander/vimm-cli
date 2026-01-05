@@ -138,7 +138,7 @@ Flags:
 - `--strict-hashes` (default: true)
 
 Behavior:
-- Existing files that match all hashes are skipped unless `--overwrite`.
+- Existing files are always verified first. If they match all hashes, they are skipped unless `--overwrite`.
 - On mismatch: delete temp file, mark failure, continue; overall exit `4` or `6`.
 
 ## `--all` Completion Check
