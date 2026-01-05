@@ -27,6 +27,7 @@ func TestNormalizeRegion(t *testing.T) {
 		"U.S.A.":         "usa",
 		"Japan":          "japan",
 		"EUR":            "europe",
+		"all":            "",
 		"any":            "",
 		"United Kingdom": "uk",
 	}
@@ -50,13 +51,30 @@ func TestMatchesRegion(t *testing.T) {
 	}
 }
 
-func TestHasExcludedTag(t *testing.T) {
+func TestParseIncludeTags(t *testing.T) {
+	tags, all := parseIncludeTags("all")
+	if !all || len(tags) != 0 {
+		t.Fatalf("expected include-all for all")
+	}
+	tags, all = parseIncludeTags("Virtual Console,LodgeNet")
+	if all || len(tags) != 2 {
+		t.Fatalf("expected two tags, got %#v (all=%v)", tags, all)
+	}
+}
+
+func TestIsExcludedByTags(t *testing.T) {
 	title := "Star Fox 64 (Japan) (Wii Virtual Console)"
-	ex := parseExcludeTags("Virtual Console,LodgeNet")
-	if !hasExcludedTag(title, ex) {
+	ex := defaultExcludedTags()
+	if !isExcludedByTags(title, ex, nil, false) {
 		t.Fatalf("expected tag to be excluded")
 	}
-	if hasExcludedTag("Star Fox 64 (USA) (Rev 1)", ex) {
+	if isExcludedByTags("Star Fox 64 (USA) (Rev 1)", ex, nil, false) {
 		t.Fatalf("did not expect exclusion")
+	}
+	if isExcludedByTags(title, ex, []string{"virtual console"}, false) {
+		t.Fatalf("expected include override")
+	}
+	if isExcludedByTags(title, ex, nil, true) {
+		t.Fatalf("expected include-all override")
 	}
 }

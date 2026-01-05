@@ -10,11 +10,17 @@ import (
 )
 
 type titleFilters struct {
-	Region      string
-	ExcludeTags []string
+	Region         string
+	ExcludeTags    []string
+	IncludeTags    []string
+	IncludeAllTags bool
 }
 
 var titleTagRe = regexp.MustCompile(`\(([^)]+)\)`)
+
+func defaultExcludedTags() []string {
+	return []string{"virtual console", "lodgenet"}
+}
 
 var knownRegions = map[string]struct{}{
 	"usa":         {},
@@ -54,7 +60,7 @@ func filterSearchResults(ctx context.Context, client *vault.Client, results []va
 		if !matchesRegion(entry.Title, filters.Region) {
 			continue
 		}
-		if hasExcludedTag(entry.Title, filters.ExcludeTags) {
+		if isExcludedByTags(entry.Title, filters.ExcludeTags, filters.IncludeTags, filters.IncludeAllTags) {
 			continue
 		}
 		if skipped < offset {
@@ -100,10 +106,14 @@ func trimMediaTitle(title string) string {
 	return strings.TrimSuffix(title, ext)
 }
 
-func parseExcludeTags(value string) []string {
+func parseIncludeTags(value string) ([]string, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return nil
+		return nil, false
+	}
+	lower := strings.ToLower(value)
+	if lower == "all" || lower == "*" {
+		return nil, true
 	}
 	parts := strings.Split(value, ",")
 	out := make([]string, 0, len(parts))
@@ -114,7 +124,7 @@ func parseExcludeTags(value string) []string {
 		}
 		out = append(out, strings.ToLower(part))
 	}
-	return out
+	return out, false
 }
 
 func normalizeRegion(value string) string {
@@ -124,7 +134,7 @@ func normalizeRegion(value string) string {
 	}
 	lower := strings.ToLower(value)
 	switch lower {
-	case "any", "all", "*":
+	case "all", "any", "*":
 		return ""
 	case "us", "u.s.", "u.s.a.", "usa":
 		return "usa"
@@ -155,19 +165,44 @@ func matchesRegion(title, region string) bool {
 	return false
 }
 
-func hasExcludedTag(title string, excludes []string) bool {
-	if len(excludes) == 0 {
+func isExcludedByTags(title string, excludes, includes []string, includeAll bool) bool {
+	if includeAll || len(excludes) == 0 {
 		return false
 	}
-	for _, tag := range extractTitleTags(title) {
+	tags := extractTitleTags(title)
+	for _, tag := range tags {
 		normalized := strings.ToLower(tag)
+		excluded := false
 		for _, ex := range excludes {
 			if ex == "" {
 				continue
 			}
 			if strings.Contains(normalized, ex) {
-				return true
+				excluded = true
+				break
 			}
+		}
+		if !excluded {
+			continue
+		}
+		if tagAllowed(normalized, includes) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func tagAllowed(normalized string, includes []string) bool {
+	if len(includes) == 0 {
+		return false
+	}
+	for _, inc := range includes {
+		if inc == "" {
+			continue
+		}
+		if strings.Contains(normalized, inc) {
+			return true
 		}
 	}
 	return false

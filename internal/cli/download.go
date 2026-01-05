@@ -55,8 +55,8 @@ DOWNLOAD FLAGS:
 VERSION FLAGS:
   --latest                      Prefer latest revision (default: true)
   --revision <value>            Override latest (e.g., rev2 or 2021-05-01)
-  --region <code>               Preferred region (default: USA, use "any" to disable)
-  --exclude-tags <tags>         Exclude titles by tag (comma-separated, default: "Virtual Console,LodgeNet")
+  --region <code>               Preferred region (default: USA, use "all" to disable)
+  --include-tags <tags>         Include excluded tags (comma-separated, default exclusions: "Virtual Console,LodgeNet"; use "all" to disable exclusions)
 
 VERIFICATION FLAGS:
   --verify                      Verify CRC/MD5/SHA1 (default: true)
@@ -74,23 +74,25 @@ SAFETY FLAGS:
 `
 
 type downloadOptions struct {
-	OutputDir    string
-	TmpDir       string
-	Retries      int
-	RetryBackoff string
-	Timeout      time.Duration
-	MaxRPS       int
-	Resume       bool
-	Overwrite    bool
-	Verify       bool
-	StrictHashes bool
-	Latest       bool
-	Revision     string
-	Region       string
-	ExcludeTags  []string
-	ApplyFilters bool
-	DryRun       bool
-	RefererBase  string
+	OutputDir      string
+	TmpDir         string
+	Retries        int
+	RetryBackoff   string
+	Timeout        time.Duration
+	MaxRPS         int
+	Resume         bool
+	Overwrite      bool
+	Verify         bool
+	StrictHashes   bool
+	Latest         bool
+	Revision       string
+	Region         string
+	ExcludeTags    []string
+	IncludeTags    []string
+	IncludeAllTags bool
+	ApplyFilters   bool
+	DryRun         bool
+	RefererBase    string
 }
 
 type downloadResult struct {
@@ -124,7 +126,7 @@ func runDownload(cfg *Config, args []string) int {
 		latest        bool
 		revision      string
 		region        string
-		exTags        string
+		includeTags   string
 		verify        bool
 		skipVerify    bool
 		strictHashes  bool
@@ -188,7 +190,7 @@ func runDownload(cfg *Config, args []string) int {
 	fs.BoolVar(&latest, "latest", true, "prefer latest")
 	fs.StringVar(&revision, "revision", "", "revision override")
 	fs.StringVar(&region, "region", "USA", "preferred region")
-	fs.StringVar(&exTags, "exclude-tags", "Virtual Console,LodgeNet", "exclude tags")
+	fs.StringVar(&includeTags, "include-tags", "", "include tags")
 
 	fs.BoolVar(&verify, "verify", true, "verify hashes")
 	fs.BoolVar(&skipVerify, "skip-verify", false, "skip verification")
@@ -306,9 +308,12 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	applyFilters := query != ""
+	includeList, includeAll := parseIncludeTags(includeTags)
 	filters := titleFilters{
-		Region:      normalizeRegion(region),
-		ExcludeTags: parseExcludeTags(exTags),
+		Region:         normalizeRegion(region),
+		ExcludeTags:    defaultExcludedTags(),
+		IncludeTags:    includeList,
+		IncludeAllTags: includeAll,
 	}
 
 	if dryRun {
@@ -354,23 +359,25 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	opts := downloadOptions{
-		OutputDir:    outputDir,
-		TmpDir:       tmpDir,
-		Retries:      retries,
-		RetryBackoff: retryBackoff,
-		Timeout:      timeout,
-		MaxRPS:       maxRPS,
-		Resume:       resume,
-		Overwrite:    overwrite,
-		Verify:       verify,
-		StrictHashes: strictHashes,
-		Latest:       latest,
-		Revision:     revision,
-		Region:       filters.Region,
-		ExcludeTags:  filters.ExcludeTags,
-		ApplyFilters: applyFilters,
-		DryRun:       dryRun,
-		RefererBase:  client.BaseURL,
+		OutputDir:      outputDir,
+		TmpDir:         tmpDir,
+		Retries:        retries,
+		RetryBackoff:   retryBackoff,
+		Timeout:        timeout,
+		MaxRPS:         maxRPS,
+		Resume:         resume,
+		Overwrite:      overwrite,
+		Verify:         verify,
+		StrictHashes:   strictHashes,
+		Latest:         latest,
+		Revision:       revision,
+		Region:         filters.Region,
+		ExcludeTags:    filters.ExcludeTags,
+		IncludeTags:    filters.IncludeTags,
+		IncludeAllTags: filters.IncludeAllTags,
+		ApplyFilters:   applyFilters,
+		DryRun:         dryRun,
+		RefererBase:    client.BaseURL,
 	}
 
 	progress := newProgressManager(cfg, concurrency)
@@ -590,7 +597,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 			logger.verbosef("skipping %d: %s (region mismatch)\n", entry.ID, entry.Title)
 			return "", entry.Title, format, true, false, false, nil
 		}
-		if hasExcludedTag(entry.Title, opts.ExcludeTags) {
+		if isExcludedByTags(entry.Title, opts.ExcludeTags, opts.IncludeTags, opts.IncludeAllTags) {
 			logger.verbosef("skipping %d: %s (excluded tag)\n", entry.ID, entry.Title)
 			return "", entry.Title, format, true, false, false, nil
 		}

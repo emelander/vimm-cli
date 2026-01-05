@@ -79,11 +79,11 @@ Flags:
 - `--query <pattern>` required
 - `--match <auto|glob|prefix|contains|regex>` default: `auto`
 - `--no-header` hide column headers in default output
-- `--region <code>` preferred region (default: USA, use `any` to disable)
-- `--exclude-tags <tags>` comma-separated tags to exclude (default: `Virtual Console,LodgeNet`)
+- `--region <code>` preferred region (default: USA, use `all` to disable)
+- `--include-tags <tags>` include excluded tags (comma-separated; default exclusions: `Virtual Console,LodgeNet`; use `all` to disable exclusions)
 
 Search results show the latest downloadable media title (if available), so region/revision tags are visible per vault ID.
-`vimm download --query` applies the same region/exclude filtering when choosing matches.
+`vimm download --query` applies the same region/include tag filtering when choosing matches.
 
 Rules:
 - `auto`: if pattern contains glob chars (`*?[]`) → `glob`, else → `prefix`
