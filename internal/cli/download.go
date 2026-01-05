@@ -266,8 +266,14 @@ func runDownload(cfg *Config, args []string) int {
 		return exitGeneric
 	}
 
+	limiter := newRateLimiter(maxRPS)
+	if limiter != nil {
+		defer limiter.Stop()
+	}
+
 	logger := &downloadLogger{cfg: cfg}
 	client := vault.NewClient(runtimeCfg.BaseURL)
+	client.Limiter = limiter
 	ctx := context.Background()
 
 	entries, expectedCount, err := selectDownloadTargets(ctx, client, system, query, match, all, ids)
@@ -318,8 +324,6 @@ func runDownload(cfg *Config, args []string) int {
 			return exitUsage
 		}
 	}
-
-	limiter := newRateLimiter(maxRPS)
 
 	opts := downloadOptions{
 		OutputDir:    outputDir,
@@ -399,9 +403,6 @@ func runDownload(cfg *Config, args []string) int {
 		Failed:     failed,
 		Verified:   verified,
 		Items:      items,
-	}
-	if limiter != nil {
-		limiter.Stop()
 	}
 	if err := outputDownloadSummary(cfg, summary); err != nil {
 		printError(os.Stderr, err)

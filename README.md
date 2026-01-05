@@ -47,11 +47,11 @@ Config files:
 - `./.vimm.toml`
 - `~/.config/vimm/config.toml`
 
-Environment variables:
-- `VIMM_BASE_URL`
-- `VIMM_OUTPUT_DIR`
-- `VIMM_CONCURRENCY`
-- `VIMM_RETRIES`
-- `VIMM_TIMEOUT`
-- `VIMM_MAX_RPS`
-- `VIMM_NO_COLOR`
+Environment variables (defaults in parentheses):
+- `VIMM_BASE_URL` (default: `https://vimm.net/vault`)
+- `VIMM_OUTPUT_DIR` (default: `.`)
+- `VIMM_CONCURRENCY` (default: `4`)
+- `VIMM_RETRIES` (default: `5`)
+- `VIMM_TIMEOUT` (default: `60s`)
+- `VIMM_MAX_RPS` (default: `0`, unlimited)
+- `VIMM_NO_COLOR` (default: `false`)

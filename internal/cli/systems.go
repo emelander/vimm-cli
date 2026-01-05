@@ -55,7 +55,17 @@ func runSystems(cfg *Config, args []string) int {
 	if cfg.NoColor == false && runtimeCfg.NoColor != nil {
 		cfg.NoColor = *runtimeCfg.NoColor
 	}
+	maxRPS := 0
+	if runtimeCfg.MaxRPS != nil {
+		maxRPS = *runtimeCfg.MaxRPS
+	}
+	limiter := newRateLimiter(maxRPS)
+	if limiter != nil {
+		defer limiter.Stop()
+	}
+
 	client := vault.NewClient(runtimeCfg.BaseURL)
+	client.Limiter = limiter
 	ctx := context.Background()
 	systems, err := client.Systems(ctx)
 	if err != nil {

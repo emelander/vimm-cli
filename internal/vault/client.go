@@ -16,6 +16,11 @@ const defaultBaseURL = "https://vimm.net/vault"
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	Limiter    Limiter
+}
+
+type Limiter interface {
+	Wait(ctx context.Context) error
 }
 
 func NewClient(baseURL string) *Client {
@@ -32,6 +37,11 @@ func NewClient(baseURL string) *Client {
 }
 
 func (c *Client) Fetch(ctx context.Context, path string) (string, error) {
+	if c.Limiter != nil {
+		if err := c.Limiter.Wait(ctx); err != nil {
+			return "", err
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
 		return "", err

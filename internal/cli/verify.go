@@ -93,7 +93,17 @@ func runVerify(cfg *Config, args []string) int {
 	if runtimeCfg.OutputDir != nil && *runtimeCfg.OutputDir != "" && outputDir == "." {
 		outputDir = *runtimeCfg.OutputDir
 	}
+	maxRPS := 0
+	if runtimeCfg.MaxRPS != nil {
+		maxRPS = *runtimeCfg.MaxRPS
+	}
+	limiter := newRateLimiter(maxRPS)
+	if limiter != nil {
+		defer limiter.Stop()
+	}
+
 	client := vault.NewClient(runtimeCfg.BaseURL)
+	client.Limiter = limiter
 	ctx := context.Background()
 
 	entries, err := selectVerifyTargets(ctx, client, system, query, match, ids)
