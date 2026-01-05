@@ -7,9 +7,9 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -341,6 +341,9 @@ func runDownload(cfg *Config, args []string) int {
 		Verified:   verified,
 		Items:      items,
 	}
+	if limiter != nil {
+		limiter.Stop()
+	}
 	if err := outputDownloadSummary(cfg, summary); err != nil {
 		printError(os.Stderr, err)
 		return exitGeneric
@@ -472,7 +475,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	zipName := zipNameFromMedia(media)
 	if zipName == "" {
-		zipName = fmt.Sprintf("%d.zip", media.ID)
+		zipName = sanitizeFilename(fmt.Sprintf("%d.zip", media.ID))
 	}
 	outputPath := filepath.Join(opts.OutputDir, zipName)
 
@@ -490,7 +493,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, media, outputPath, opts.TmpDir)
+		path, err := downloadZip(ctx, httpClient, limiter, referer, media, outputPath, opts.TmpDir, opts.Resume)
 		if err != nil {
 			return err
 		}
@@ -670,16 +673,35 @@ func parseMediaDate(media vault.Media) (time.Time, bool) {
 }
 
 func zipNameFromMedia(media vault.Media) string {
-	title := media.DecodedTitle()
+	title := sanitizeFilename(media.DecodedTitle())
 	if title == "" {
 		return ""
 	}
 	ext := filepath.Ext(title)
 	base := strings.TrimSuffix(title, ext)
-	return base + ".zip"
+	name := base + ".zip"
+	return sanitizeFilename(name)
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer string, media vault.Media, outputPath, tmpDir string) (string, error) {
+func sanitizeFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = path.Base(name)
+	name = strings.TrimSpace(name)
+	name = strings.Trim(name, ".")
+	name = strings.ReplaceAll(name, "/", "-")
+	name = strings.ReplaceAll(name, "\\", "-")
+	name = strings.ReplaceAll(name, ":", "-")
+	if name == "" || name == "." || name == ".." {
+		return ""
+	}
+	return name
+}
+
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer string, media vault.Media, outputPath, tmpDir string, resume bool) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
@@ -696,29 +718,45 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		req.Header.Set("Referer", referer)
 	}
 
+	tmpPath := filepath.Join(tmpDir, filepath.Base(outputPath)+".part")
+	var resumeFrom int64
+	if resume {
+		if info, err := os.Stat(tmpPath); err == nil {
+			resumeFrom = info.Size()
+		}
+	}
+	if resumeFrom > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumeFrom))
+	}
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return outputPath, err
 	}
 	defer resp.Body.Close()
+	if resumeFrom > 0 && resp.StatusCode == http.StatusOK {
+		// Server ignored range, restart from scratch.
+		_ = os.Remove(tmpPath)
+		resumeFrom = 0
+	}
+	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		_ = os.Remove(tmpPath)
+		return outputPath, fmt.Errorf("resume failed: range not satisfiable")
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return outputPath, fmt.Errorf("download failed: %s", resp.Status)
-	}
-
-	if header := resp.Header.Get("Content-Disposition"); header != "" {
-		if _, params, err := mime.ParseMediaType(header); err == nil {
-			if name := strings.TrimSpace(params["filename"]); name != "" {
-				outputPath = filepath.Join(filepath.Dir(outputPath), name)
-			}
-		}
 	}
 
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return outputPath, err
 	}
 
-	tmpPath := filepath.Join(tmpDir, filepath.Base(outputPath)+".part")
-	out, err := os.Create(tmpPath)
+	var out *os.File
+	if resumeFrom > 0 && resp.StatusCode == http.StatusPartialContent {
+		out, err = os.OpenFile(tmpPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	} else {
+		out, err = os.Create(tmpPath)
+	}
 	if err != nil {
 		return outputPath, err
 	}
@@ -818,7 +856,8 @@ func retryDelay(attempt int, mode string) time.Duration {
 }
 
 type rateLimiter struct {
-	ch <-chan time.Time
+	ticker *time.Ticker
+	ch     <-chan time.Time
 }
 
 func newRateLimiter(maxRPS int) *rateLimiter {
@@ -830,7 +869,7 @@ func newRateLimiter(maxRPS int) *rateLimiter {
 		interval = time.Second
 	}
 	ticker := time.NewTicker(interval)
-	return &rateLimiter{ch: ticker.C}
+	return &rateLimiter{ticker: ticker, ch: ticker.C}
 }
 
 func (r *rateLimiter) Wait(ctx context.Context) error {
@@ -843,4 +882,11 @@ func (r *rateLimiter) Wait(ctx context.Context) error {
 	case <-r.ch:
 		return nil
 	}
+}
+
+func (r *rateLimiter) Stop() {
+	if r == nil || r.ticker == nil {
+		return
+	}
+	r.ticker.Stop()
 }

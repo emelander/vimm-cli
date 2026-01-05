@@ -45,6 +45,26 @@ func ComputeROMHashesFromZip(path string) (Hashes, string, error) {
 	}
 	defer reader.Close()
 
+	var expectedName string
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		if strings.EqualFold(filepath.Base(file.Name), "Vimm's Lair.txt") {
+			rc, err := file.Open()
+			if err != nil {
+				return Hashes{}, "", err
+			}
+			data, err := io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return Hashes{}, "", err
+			}
+			expectedName = ExtractRomNameFromLair(data)
+			break
+		}
+	}
+
 	var target *zip.File
 	var maxSize uint64
 	for _, file := range reader.File {
@@ -54,6 +74,10 @@ func ComputeROMHashesFromZip(path string) (Hashes, string, error) {
 		name := filepath.Base(file.Name)
 		if strings.EqualFold(name, "Vimm's Lair.txt") {
 			continue
+		}
+		if expectedName != "" && strings.EqualFold(name, filepath.Base(expectedName)) {
+			target = file
+			break
 		}
 		if file.UncompressedSize64 >= maxSize {
 			maxSize = file.UncompressedSize64

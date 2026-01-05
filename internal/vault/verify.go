@@ -2,6 +2,7 @@ package vault
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -33,4 +34,23 @@ func ParseLairTxt(data []byte) (Hashes, error) {
 		return Hashes{}, fmt.Errorf("hashes not found in Vimm's Lair.txt")
 	}
 	return hashes, nil
+}
+
+func ExtractRomNameFromLair(data []byte) string {
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, ":") {
+			continue
+		}
+		ext := filepath.Ext(line)
+		if len(ext) < 2 || len(ext) > 6 {
+			continue
+		}
+		return line
+	}
+	return ""
 }

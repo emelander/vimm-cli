@@ -53,6 +53,36 @@ func TestReadLairHashesFromZipMissing(t *testing.T) {
 	}
 }
 
+func TestComputeROMHashesPrefersLairFilename(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "multi.zip")
+
+	smallName := "Small.bin"
+	smallData := []byte("small")
+	smallHashes := computeHashes(smallData)
+
+	largeName := "Large.bin"
+	largeData := make([]byte, 1024)
+	for i := range largeData {
+		largeData[i] = byte(i % 255)
+	}
+
+	if err := writeMultiFileZip(zipPath, smallName, smallData, largeName, largeData, smallHashes); err != nil {
+		t.Fatalf("writeMultiFileZip: %v", err)
+	}
+
+	gotROM, name, err := ComputeROMHashesFromZip(zipPath)
+	if err != nil {
+		t.Fatalf("ComputeROMHashesFromZip error: %v", err)
+	}
+	if name != smallName {
+		t.Fatalf("expected %q, got %q", smallName, name)
+	}
+	if gotROM != smallHashes {
+		t.Fatalf("expected hashes %+v, got %+v", smallHashes, gotROM)
+	}
+}
+
 func writeTestZip(path, romName string, romContent []byte, hashes Hashes, includeLair bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -79,6 +109,45 @@ func writeTestZip(path, romName string, romContent []byte, hashes Hashes, includ
 		return err
 	}
 	if _, err := w.Write(romContent); err != nil {
+		return err
+	}
+	if err := zw.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeMultiFileZip(path, expectedName string, expectedData []byte, otherName string, otherData []byte, hashes Hashes) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	zw := zip.NewWriter(file)
+	lairText := fmt.Sprintf("Test\n\n%s\nCRC:   %s\nMD5:   %s\nSHA-1: %s\n", expectedName, hashes.CRC, hashes.MD5, hashes.SHA1)
+	lair, err := zw.Create("Vimm's Lair.txt")
+	if err != nil {
+		return err
+	}
+	if _, err := lair.Write([]byte(lairText)); err != nil {
+		return err
+	}
+	w1, err := zw.Create(expectedName)
+	if err != nil {
+		return err
+	}
+	if _, err := w1.Write(expectedData); err != nil {
+		return err
+	}
+	w2, err := zw.Create(otherName)
+	if err != nil {
+		return err
+	}
+	if _, err := w2.Write(otherData); err != nil {
 		return err
 	}
 	if err := zw.Close(); err != nil {
