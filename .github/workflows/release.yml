@@ -1,0 +1,95 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*.*'
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go build -o "dist/vimm-${GOOS}-${GOARCH}${{ matrix.ext }}" ./cmd/vimm
+
+      - name: Package
+        env:
+          VERSION: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+          cd dist
+          if [ "$ARCHIVE" = "zip" ]; then
+            zip -q "vimm_${VERSION}_${GOOS}_${GOARCH}.zip" "vimm-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          else
+            tar -czf "vimm_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "vimm-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimm-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/vimm_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.*
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
