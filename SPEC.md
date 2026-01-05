@@ -70,6 +70,7 @@ Systems are identified by system codes (vault slugs), e.g., `N64` for `https://v
 - plain: `CODE<TAB>NAME<TAB>CLASS<TAB>TITLES`
 - json: array of `{slug,name,class,titles}`
 - default: aligned table with headers `CODE NAME CLASS TITLES`
+- `--no-header` hides the header row in default output
 
 ## Search Semantics
 `vimm search` and `vimm download --query` share matching rules:
@@ -77,6 +78,7 @@ Systems are identified by system codes (vault slugs), e.g., `N64` for `https://v
 Flags:
 - `--query <pattern>` required
 - `--match <auto|glob|prefix|contains|regex>` default: `auto`
+- `--no-header` hide column headers in default output
 
 Rules:
 - `auto`: if pattern contains glob chars (`*?[]`) → `glob`, else → `prefix`

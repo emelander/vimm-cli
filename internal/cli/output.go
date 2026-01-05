@@ -28,15 +28,42 @@ type downloadItem struct {
 	Format   string `json:"format,omitempty"`
 }
 
-func outputSearchResults(cfg *Config, results []vault.ROMEntry) error {
+func outputSearchResults(cfg *Config, results []vault.ROMEntry, noHeader bool) error {
 	if cfg.JSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(results)
 	}
+	if cfg.Plain {
+		for _, entry := range results {
+			fmt.Fprintf(os.Stdout, "%s\t%d\t%s\n", entry.Title, entry.ID, entry.System)
+		}
+		return nil
+	}
 
+	titleHeader := "TITLE"
+	idHeader := "ID"
+	systemHeader := "SYSTEM"
+	titleWidth := len(titleHeader)
+	idWidth := len(idHeader)
+	systemWidth := len(systemHeader)
 	for _, entry := range results {
-		fmt.Fprintf(os.Stdout, "%s\t%d\t%s\n", entry.Title, entry.ID, entry.System)
+		if len(entry.Title) > titleWidth {
+			titleWidth = len(entry.Title)
+		}
+		idLen := len(fmt.Sprintf("%d", entry.ID))
+		if idLen > idWidth {
+			idWidth = idLen
+		}
+		if len(entry.System) > systemWidth {
+			systemWidth = len(entry.System)
+		}
+	}
+	if !noHeader {
+		fmt.Fprintf(os.Stdout, "%-*s  %*s  %-*s\n", titleWidth, titleHeader, idWidth, idHeader, systemWidth, systemHeader)
+	}
+	for _, entry := range results {
+		fmt.Fprintf(os.Stdout, "%-*s  %*d  %-*s\n", titleWidth, entry.Title, idWidth, entry.ID, systemWidth, entry.System)
 	}
 	return nil
 }

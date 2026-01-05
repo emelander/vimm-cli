@@ -19,17 +19,20 @@ USAGE:
 
 FLAGS:
   --class <console|handheld>   Filter by system class
+  --no-header                  Hide column headers
   -h, --help                   Show help
 `
 
 func runSystems(cfg *Config, args []string) int {
 	var (
 		class string
+		noHdr bool
 		help  bool
 	)
 	fs := flag.NewFlagSet("systems", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&class, "class", "", "system class")
+	fs.BoolVar(&noHdr, "no-header", false, "hide column headers")
 	fs.BoolVar(&help, "h", false, "show help")
 	fs.BoolVar(&help, "help", false, "show help")
 
@@ -135,7 +138,9 @@ func runSystems(cfg *Config, args []string) int {
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "%-*s  %-*s  %-*s  %*s\n", codeWidth, codeHeader, nameWidth, nameHeader, classWidth, classHeader, titlesWidth, titlesHeader)
+	if !noHdr {
+		fmt.Fprintf(os.Stdout, "%-*s  %-*s  %-*s  %*s\n", codeWidth, codeHeader, nameWidth, nameHeader, classWidth, classHeader, titlesWidth, titlesHeader)
+	}
 	for _, sys := range systems {
 		fmt.Fprintf(os.Stdout, "%-*s  %-*s  %-*s  %*d\n", codeWidth, sys.Slug, nameWidth, sys.Name, classWidth, sys.Class, titlesWidth, sys.Titles)
 	}

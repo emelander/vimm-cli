@@ -24,6 +24,7 @@ FLAGS:
   --match <auto|glob|prefix|contains|regex>  Match mode (default: auto)
   --limit <n>                   Max results (default: 100)
   --offset <n>                  Skip first N results (default: 0)
+  --no-header                   Hide column headers
   -h, --help                    Show help
 `
 
@@ -35,6 +36,7 @@ func runSearch(cfg *Config, args []string) int {
 		match  string
 		limit  int
 		offset int
+		noHdr  bool
 		help   bool
 	)
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
@@ -45,6 +47,7 @@ func runSearch(cfg *Config, args []string) int {
 	fs.StringVar(&match, "match", "auto", "match mode")
 	fs.IntVar(&limit, "limit", 100, "limit results")
 	fs.IntVar(&offset, "offset", 0, "offset results")
+	fs.BoolVar(&noHdr, "no-header", false, "hide column headers")
 	fs.BoolVar(&help, "h", false, "show help")
 	fs.BoolVar(&help, "help", false, "show help")
 
@@ -159,7 +162,7 @@ func runSearch(cfg *Config, args []string) int {
 		results = results[:limit]
 	}
 
-	if err := outputSearchResults(cfg, results); err != nil {
+	if err := outputSearchResults(cfg, results, noHdr); err != nil {
 		printError(os.Stderr, err)
 		return exitGeneric
 	}

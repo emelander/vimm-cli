@@ -85,10 +85,10 @@ _vimm() {
   local cmd="${COMP_WORDS[1]}"
   case "$cmd" in
     systems)
-      COMPREPLY=( $(compgen -W "--class --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--class --no-header --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
       ;;
     search)
-      COMPREPLY=( $(compgen -W "--system --class --query --match --limit --offset --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--system --class --query --match --limit --offset --no-header --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
       ;;
     download)
       COMPREPLY=( $(compgen -W "--system --query --match --all --id --output-dir --tmp-dir --concurrency -c --retries --retry-backoff --timeout --max-rps --resume --overwrite --dry-run --latest --revision --verify --skip-verify --strict-hashes --count-check --strict-count --allow-mismatch --force --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
@@ -128,9 +128,9 @@ _vimm() {
   local cmd=${words[2]}
   case $cmd in
     systems)
-      _arguments "--class[Filter by system class]" "--help[Show help]" ;;
+      _arguments "--class[Filter by system class]" "--no-header[Hide column headers]" "--help[Show help]" ;;
     search)
-      _arguments "--system[System code]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--no-header[Hide column headers]" "--help[Show help]" ;;
     download)
       _arguments "--system[System code]" "--query[Search pattern]" "--match[Match mode]" "--all[Download all]" "--id[Vault id]" "--output-dir[Output directory]" "--tmp-dir[Temp directory]" "-c[Concurrency]" "--concurrency[Concurrency]" "--retries[Retries]" "--retry-backoff[Retry strategy]" "--timeout[Timeout]" "--max-rps[Rate limit]" "--resume[Resume]" "--overwrite[Overwrite]" "--dry-run[Dry run]" "--latest[Prefer latest]" "--revision[Revision override]" "--verify[Verify hashes]" "--skip-verify[Skip verification]" "--strict-hashes[Strict hashes]" "--count-check[Count check]" "--strict-count[Strict count]" "--allow-mismatch[Allow mismatch]" "--force[Skip confirmation]" "--help[Show help]" ;;
     verify)
@@ -145,12 +145,14 @@ compdef _vimm vimm
 const fishCompletion = `# fish completion for vimm
 complete -c vimm -f -n '__fish_use_subcommand' -a 'systems search download verify completion help'
 complete -c vimm -n '__fish_seen_subcommand_from systems' -l class -d 'Filter by system class'
+complete -c vimm -n '__fish_seen_subcommand_from systems' -l no-header -d 'Hide column headers'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l class -d 'System class'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l query -d 'Search pattern'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l match -d 'Match mode'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l limit -d 'Limit results'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l offset -d 'Offset results'
+complete -c vimm -n '__fish_seen_subcommand_from search' -l no-header -d 'Hide column headers'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l query -d 'Search pattern'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l match -d 'Match mode'
