@@ -55,6 +55,8 @@ DOWNLOAD FLAGS:
 VERSION FLAGS:
   --latest                      Prefer latest revision (default: true)
   --revision <value>            Override latest (e.g., rev2 or 2021-05-01)
+  --region <code>               Preferred region (default: USA, use "any" to disable)
+  --exclude-tags <tags>         Exclude titles by tag (comma-separated, default: "Virtual Console,LodgeNet")
 
 VERIFICATION FLAGS:
   --verify                      Verify CRC/MD5/SHA1 (default: true)
@@ -84,6 +86,9 @@ type downloadOptions struct {
 	StrictHashes bool
 	Latest       bool
 	Revision     string
+	Region       string
+	ExcludeTags  []string
+	ApplyFilters bool
 	DryRun       bool
 	RefererBase  string
 }
@@ -118,6 +123,8 @@ func runDownload(cfg *Config, args []string) int {
 		dryRun        bool
 		latest        bool
 		revision      string
+		region        string
+		exTags        string
 		verify        bool
 		skipVerify    bool
 		strictHashes  bool
@@ -180,6 +187,8 @@ func runDownload(cfg *Config, args []string) int {
 
 	fs.BoolVar(&latest, "latest", true, "prefer latest")
 	fs.StringVar(&revision, "revision", "", "revision override")
+	fs.StringVar(&region, "region", "USA", "preferred region")
+	fs.StringVar(&exTags, "exclude-tags", "Virtual Console,LodgeNet", "exclude tags")
 
 	fs.BoolVar(&verify, "verify", true, "verify hashes")
 	fs.BoolVar(&skipVerify, "skip-verify", false, "skip verification")
@@ -296,9 +305,25 @@ func runDownload(cfg *Config, args []string) int {
 		}
 	}
 
+	applyFilters := query != ""
+	filters := titleFilters{
+		Region:      normalizeRegion(region),
+		ExcludeTags: parseExcludeTags(exTags),
+	}
+
 	if dryRun {
-		items := make([]downloadItem, 0, len(entries))
-		for _, entry := range entries {
+		entriesForOutput := entries
+		if applyFilters {
+			filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
+			if err != nil {
+				printError(os.Stderr, err)
+				return exitNetwork
+			}
+			entriesForOutput = filtered
+		}
+
+		items := make([]downloadItem, 0, len(entriesForOutput))
+		for _, entry := range entriesForOutput {
 			items = append(items, downloadItem{
 				ID:     entry.ID,
 				Title:  entry.Title,
@@ -312,7 +337,7 @@ func runDownload(cfg *Config, args []string) int {
 			}
 			return exitOK
 		}
-		for _, entry := range entries {
+		for _, entry := range entriesForOutput {
 			fmt.Fprintf(os.Stdout, "%d\t%s\n", entry.ID, entry.Title)
 		}
 		return exitOK
@@ -341,6 +366,9 @@ func runDownload(cfg *Config, args []string) int {
 		StrictHashes: strictHashes,
 		Latest:       latest,
 		Revision:     revision,
+		Region:       filters.Region,
+		ExcludeTags:  filters.ExcludeTags,
+		ApplyFilters: applyFilters,
 		DryRun:       dryRun,
 		RefererBase:  client.BaseURL,
 	}
@@ -553,6 +581,20 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 		entry.Title = title
 	}
 	format := formatLabel(alt)
+
+	if displayTitle := trimMediaTitle(entry.Title); displayTitle != "" {
+		entry.Title = displayTitle
+	}
+	if opts.ApplyFilters {
+		if !matchesRegion(entry.Title, opts.Region) {
+			logger.verbosef("skipping %d: %s (region mismatch)\n", entry.ID, entry.Title)
+			return "", entry.Title, format, true, false, false, nil
+		}
+		if hasExcludedTag(entry.Title, opts.ExcludeTags) {
+			logger.verbosef("skipping %d: %s (excluded tag)\n", entry.ID, entry.Title)
+			return "", entry.Title, format, true, false, false, nil
+		}
+	}
 
 	zipName := zipNameFromMedia(media)
 	if zipName == "" {

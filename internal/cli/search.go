@@ -24,6 +24,8 @@ FLAGS:
   --match <auto|glob|prefix|contains|regex>  Match mode (default: auto)
   --limit <n>                   Max results (default: 100)
   --offset <n>                  Skip first N results (default: 0)
+  --region <code>               Preferred region (default: USA, use "any" to disable)
+  --exclude-tags <tags>         Exclude titles by tag (comma-separated, default: "Virtual Console,LodgeNet")
   --no-header                   Hide column headers
   -h, --help                    Show help
 `
@@ -36,6 +38,8 @@ func runSearch(cfg *Config, args []string) int {
 		match  string
 		limit  int
 		offset int
+		region string
+		exTags string
 		noHdr  bool
 		help   bool
 	)
@@ -47,6 +51,8 @@ func runSearch(cfg *Config, args []string) int {
 	fs.StringVar(&match, "match", "auto", "match mode")
 	fs.IntVar(&limit, "limit", 100, "limit results")
 	fs.IntVar(&offset, "offset", 0, "offset results")
+	fs.StringVar(&region, "region", "USA", "preferred region")
+	fs.StringVar(&exTags, "exclude-tags", "Virtual Console,LodgeNet", "exclude tags")
 	fs.BoolVar(&noHdr, "no-header", false, "hide column headers")
 	fs.BoolVar(&help, "h", false, "show help")
 	fs.BoolVar(&help, "help", false, "show help")
@@ -151,18 +157,17 @@ func runSearch(cfg *Config, args []string) int {
 		return results[i].System < results[j].System
 	})
 
-	if offset > 0 {
-		if offset >= len(results) {
-			results = nil
-		} else {
-			results = results[offset:]
-		}
+	filters := titleFilters{
+		Region:      normalizeRegion(region),
+		ExcludeTags: parseExcludeTags(exTags),
 	}
-	if limit >= 0 && limit < len(results) {
-		results = results[:limit]
+	filtered, err := filterSearchResults(ctx, client, results, filters, offset, limit)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitNetwork
 	}
 
-	if err := outputSearchResults(cfg, results, noHdr); err != nil {
+	if err := outputSearchResults(cfg, filtered, noHdr); err != nil {
 		printError(os.Stderr, err)
 		return exitGeneric
 	}
