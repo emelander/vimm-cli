@@ -295,7 +295,18 @@ func runDownload(cfg *Config, args []string) int {
 		printError(os.Stderr, err)
 		return exitNetwork
 	}
-	if all && countCheck {
+
+	includeList, includeAll := parseIncludeTags(includeVariants)
+	filters := titleFilters{
+		Region:         normalizeRegion(region),
+		ExcludeTags:    defaultExcludedTags(),
+		IncludeTags:    includeList,
+		IncludeAllTags: includeAll,
+	}
+	filtersActive := filters.Region != "" || !filters.IncludeAllTags
+	applyFilters := filtersActive && (query != "" || all)
+
+	if all && countCheck && !applyFilters {
 		if expectedCount == 0 {
 			if strictCount {
 				printError(os.Stderr, fmt.Errorf("system count unavailable"))
@@ -305,15 +316,6 @@ func runDownload(cfg *Config, args []string) int {
 			printError(os.Stderr, fmt.Errorf("count mismatch: expected %d, got %d", expectedCount, len(entries)))
 			return exitCountMismatch
 		}
-	}
-
-	applyFilters := query != ""
-	includeList, includeAll := parseIncludeTags(includeVariants)
-	filters := titleFilters{
-		Region:         normalizeRegion(region),
-		ExcludeTags:    defaultExcludedTags(),
-		IncludeTags:    includeList,
-		IncludeAllTags: includeAll,
 	}
 
 	if dryRun {
@@ -459,7 +461,7 @@ func runDownload(cfg *Config, args []string) int {
 		}
 		return exitPartial
 	}
-	if all && countCheck && expectedCount > 0 && !allowMismatch {
+	if all && countCheck && expectedCount > 0 && !allowMismatch && !applyFilters {
 		completed := verified
 		if !verify {
 			completed = downloaded + skipped
@@ -584,7 +586,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	if err != nil {
 		return "", "", "", false, false, false, err
 	}
-	if entry.Title == "" && title != "" {
+	if title != "" {
 		entry.Title = title
 	}
 	format := formatLabel(alt)

@@ -22,6 +22,38 @@ func defaultExcludedTags() []string {
 	return []string{"virtual console", "lodgenet"}
 }
 
+var knownExtensions = map[string]struct{}{
+	".7z":   {},
+	".bin":  {},
+	".cia":  {},
+	".chd":  {},
+	".cue":  {},
+	".gcm":  {},
+	".gcz":  {},
+	".gb":   {},
+	".gba":  {},
+	".gbc":  {},
+	".gen":  {},
+	".img":  {},
+	".iso":  {},
+	".mdf":  {},
+	".mds":  {},
+	".n64":  {},
+	".nds":  {},
+	".nes":  {},
+	".pce":  {},
+	".rom":  {},
+	".sfc":  {},
+	".sgx":  {},
+	".smc":  {},
+	".sms":  {},
+	".v64":  {},
+	".wad":  {},
+	".wbfs": {},
+	".z64":  {},
+	".zip":  {},
+}
+
 var knownRegions = map[string]struct{}{
 	"usa":         {},
 	"japan":       {},
@@ -101,6 +133,9 @@ func trimMediaTitle(title string) string {
 	}
 	ext := path.Ext(title)
 	if ext == "" {
+		return title
+	}
+	if _, ok := knownExtensions[strings.ToLower(ext)]; !ok {
 		return title
 	}
 	return strings.TrimSuffix(title, ext)

@@ -41,6 +41,9 @@ go install github.com/emelander/vimm-download/cmd/vimm@latest
 # Download all ROMs for a system code (confirmation required)
 ./vimm download --system N64 --all
 
+# Download all USA LodgeNet variants
+./vimm download --system N64 --all --region USA --include-variants LodgeNet
+
 # Verify local files by system code
 ./vimm verify --system N64 --output-dir ./roms --query "*fox*"
 ```

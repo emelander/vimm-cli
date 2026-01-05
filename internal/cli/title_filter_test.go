@@ -8,6 +8,9 @@ func TestTrimMediaTitle(t *testing.T) {
 	if got != "Star Fox 64 (USA) (Rev 1)" {
 		t.Fatalf("trimMediaTitle = %q", got)
 	}
+	if trimMediaTitle("Dr. Mario") != "Dr. Mario" {
+		t.Fatalf("expected title without extension to remain unchanged")
+	}
 }
 
 func TestExtractTitleTags(t *testing.T) {

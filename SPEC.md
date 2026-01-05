@@ -83,7 +83,7 @@ Flags:
 - `--include-variants <variants>` include excluded variants (comma-separated; default exclusions: `Virtual Console,LodgeNet`; use `all` to disable exclusions)
 
 Search results show the latest downloadable media title (if available), so region/revision/variant tags are visible per vault ID.
-`vimm download --query` applies the same region/include-variants filtering when choosing matches.
+`vimm download --query` and `vimm download --all` apply the same region/include-variants filtering when choosing matches.
 
 Rules:
 - `auto`: if pattern contains glob chars (`*?[]`) → `glob`, else → `prefix`
@@ -140,6 +140,7 @@ Behavior:
 ## `--all` Completion Check
 When `--all` is used:
 - Compare total verified files (existing + newly downloaded) to the system’s reported title count.
+  - If region/variant filters are active, the system count comparison is skipped.
 
 Flags:
 - `--count-check` (default: true)
