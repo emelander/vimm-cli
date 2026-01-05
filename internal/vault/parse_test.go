@@ -66,6 +66,38 @@ func TestParseSearchResults(t *testing.T) {
 	}
 }
 
+func TestParseMediaFromPage(t *testing.T) {
+	html := `
+	<html><head><script>
+	const media=[{"ID":123,"GoodTitle":"U3VwZXIgTWFyaW8gNjQgKFVTQSkuemY0","Version":"1.0","VersionString":"1.0","Zipped":"100","GoodHash":"ABCDEF12","GoodMd5":"CAFEBABE","GoodSha1":"DEADBEEF"}];
+	</script></head></html>`
+	media, err := ParseMediaFromPage(html)
+	if err != nil {
+		t.Fatalf("ParseMediaFromPage error: %v", err)
+	}
+	if len(media) != 1 {
+		t.Fatalf("expected 1 media, got %d", len(media))
+	}
+	if media[0].ID != 123 {
+		t.Fatalf("expected id 123, got %d", media[0].ID)
+	}
+	hashes := media[0].ExpectedHashes()
+	if hashes.CRC != "abcdef12" || hashes.MD5 != "cafebabe" || hashes.SHA1 != "deadbeef" {
+		t.Fatalf("unexpected hashes: %+v", hashes)
+	}
+}
+
+func TestParseLairTxt(t *testing.T) {
+	data := []byte("CRC:   b1fcaa9c\nMD5:   caf9a78db13ee00002ff63a3c0c5eabb\nSHA-1: d8b1088520f7c5f81433292a9258c1184afa1457\n")
+	hashes, err := ParseLairTxt(data)
+	if err != nil {
+		t.Fatalf("ParseLairTxt error: %v", err)
+	}
+	if hashes.CRC != "b1fcaa9c" || hashes.MD5 != "caf9a78db13ee00002ff63a3c0c5eabb" || hashes.SHA1 != "d8b1088520f7c5f81433292a9258c1184afa1457" {
+		t.Fatalf("unexpected hashes: %+v", hashes)
+	}
+}
+
 func TestSlugFromHref(t *testing.T) {
 	if got := slugFromHref("/vault/N64"); got != "N64" {
 		t.Fatalf("expected N64, got %q", got)

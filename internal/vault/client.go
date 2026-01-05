@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -76,6 +77,56 @@ func (c *Client) Search(ctx context.Context, slug, query string) ([]ROMEntry, er
 		q.Set("q", query)
 	}
 	body, err := c.Fetch(ctx, "/?"+q.Encode())
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchResults(strings.NewReader(body), slug)
+}
+
+func (c *Client) ROMMedia(ctx context.Context, id int) ([]Media, error) {
+	body, err := c.Fetch(ctx, "/"+strconv.Itoa(id))
+	if err != nil {
+		return nil, err
+	}
+	return ParseMediaFromPage(body)
+}
+
+func (c *Client) ListAll(ctx context.Context, slug string) ([]ROMEntry, error) {
+	sections := []string{"number"}
+	for letter := 'A'; letter <= 'Z'; letter++ {
+		sections = append(sections, string(letter))
+	}
+
+	entries := make([]ROMEntry, 0, 1024)
+	seen := make(map[int]struct{})
+	for _, section := range sections {
+		sectionEntries, err := c.ListSection(ctx, slug, section)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range sectionEntries {
+			if _, ok := seen[entry.ID]; ok {
+				continue
+			}
+			seen[entry.ID] = struct{}{}
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
+}
+
+func (c *Client) ListSection(ctx context.Context, slug, section string) ([]ROMEntry, error) {
+	var path string
+	if section == "number" {
+		q := url.Values{}
+		q.Set("p", "list")
+		q.Set("system", slug)
+		q.Set("section", "number")
+		path = "/?" + q.Encode()
+	} else {
+		path = "/" + slug + "/" + section
+	}
+	body, err := c.Fetch(ctx, path)
 	if err != nil {
 		return nil, err
 	}
