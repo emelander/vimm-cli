@@ -40,6 +40,15 @@ values published in `Vimm’s Lair.txt` on each ROM page.
 - **stdout**: primary data (lists/summaries/JSON)
 - **stderr**: progress, retries, warnings, errors
 
+## Progress Indicators
+When running `vimm download` in TTY mode (and **not** `--plain`/`--json`), render live progress on stderr:
+- **Overall line (top):** aggregate progress across all downloads with a btop-style bar.
+  - Format: `Overall: XX% <progress bar> <speed> / <total size>`
+- **Per-title lines (active only):** one line per currently-downloading title (bounded by concurrency).
+  - Format: `<title>: XX% <progress bar> <speed> / <title size>`
+- Only show progress bars for currently active downloads (do not keep thousands of completed lines visible).
+- Progress bars should update in-place (no log spam).
+
 ## Exit Codes
 - `0` success
 - `1` generic failure
