@@ -88,10 +88,10 @@ _vimm() {
       COMPREPLY=( $(compgen -W "--class --no-header --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
       ;;
     search)
-      COMPREPLY=( $(compgen -W "--system --class --query --match --limit --offset --region --include-tags --no-header --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--system --class --query --match --limit --offset --region --include-variants --no-header --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
       ;;
     download)
-      COMPREPLY=( $(compgen -W "--system --query --match --all --id --output-dir --tmp-dir --concurrency -c --retries --retry-backoff --timeout --max-rps --resume --overwrite --dry-run --latest --revision --region --include-tags --verify --skip-verify --strict-hashes --count-check --strict-count --allow-mismatch --force --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--system --query --match --all --id --output-dir --tmp-dir --concurrency -c --retries --retry-backoff --timeout --max-rps --resume --overwrite --dry-run --latest --revision --region --include-variants --verify --skip-verify --strict-hashes --count-check --strict-count --allow-mismatch --force --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
       ;;
     verify)
       COMPREPLY=( $(compgen -W "--system --id --query --match --output-dir --strict-hashes --help -h --json --plain --quiet -q --verbose -v --no-color --no-input --config --version" -- "$cur") )
@@ -130,9 +130,9 @@ _vimm() {
     systems)
       _arguments "--class[Filter by system class]" "--no-header[Hide column headers]" "--help[Show help]" ;;
     search)
-      _arguments "--system[System code]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--region[Preferred region]" "--include-tags[Include tags]" "--no-header[Hide column headers]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--class[System class]" "--query[Search pattern]" "--match[Match mode]" "--limit[Limit]" "--offset[Offset]" "--region[Preferred region]" "--include-variants[Include variants]" "--no-header[Hide column headers]" "--help[Show help]" ;;
     download)
-      _arguments "--system[System code]" "--query[Search pattern]" "--match[Match mode]" "--all[Download all]" "--id[Vault id]" "--output-dir[Output directory]" "--tmp-dir[Temp directory]" "-c[Concurrency]" "--concurrency[Concurrency]" "--retries[Retries]" "--retry-backoff[Retry strategy]" "--timeout[Timeout]" "--max-rps[Rate limit]" "--resume[Resume]" "--overwrite[Overwrite]" "--dry-run[Dry run]" "--latest[Prefer latest]" "--revision[Revision override]" "--region[Preferred region]" "--include-tags[Include tags]" "--verify[Verify hashes]" "--skip-verify[Skip verification]" "--strict-hashes[Strict hashes]" "--count-check[Count check]" "--strict-count[Strict count]" "--allow-mismatch[Allow mismatch]" "--force[Skip confirmation]" "--help[Show help]" ;;
+      _arguments "--system[System code]" "--query[Search pattern]" "--match[Match mode]" "--all[Download all]" "--id[Vault id]" "--output-dir[Output directory]" "--tmp-dir[Temp directory]" "-c[Concurrency]" "--concurrency[Concurrency]" "--retries[Retries]" "--retry-backoff[Retry strategy]" "--timeout[Timeout]" "--max-rps[Rate limit]" "--resume[Resume]" "--overwrite[Overwrite]" "--dry-run[Dry run]" "--latest[Prefer latest]" "--revision[Revision override]" "--region[Preferred region]" "--include-variants[Include variants]" "--verify[Verify hashes]" "--skip-verify[Skip verification]" "--strict-hashes[Strict hashes]" "--count-check[Count check]" "--strict-count[Strict count]" "--allow-mismatch[Allow mismatch]" "--force[Skip confirmation]" "--help[Show help]" ;;
     verify)
       _arguments "--system[System code]" "--id[Vault id]" "--query[Search pattern]" "--match[Match mode]" "--output-dir[Output directory]" "--strict-hashes[Strict hashes]" "--help[Show help]" ;;
     completion)
@@ -153,7 +153,7 @@ complete -c vimm -n '__fish_seen_subcommand_from search' -l match -d 'Match mode
 complete -c vimm -n '__fish_seen_subcommand_from search' -l limit -d 'Limit results'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l offset -d 'Offset results'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l region -d 'Preferred region'
-complete -c vimm -n '__fish_seen_subcommand_from search' -l include-tags -d 'Include tags'
+complete -c vimm -n '__fish_seen_subcommand_from search' -l include-variants -d 'Include variants'
 complete -c vimm -n '__fish_seen_subcommand_from search' -l no-header -d 'Hide column headers'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l system -d 'System code'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l query -d 'Search pattern'
@@ -173,7 +173,7 @@ complete -c vimm -n '__fish_seen_subcommand_from download' -l dry-run -d 'Dry ru
 complete -c vimm -n '__fish_seen_subcommand_from download' -l latest -d 'Prefer latest'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l revision -d 'Revision override'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l region -d 'Preferred region'
-complete -c vimm -n '__fish_seen_subcommand_from download' -l include-tags -d 'Include tags'
+complete -c vimm -n '__fish_seen_subcommand_from download' -l include-variants -d 'Include variants'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l verify -d 'Verify hashes'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l skip-verify -d 'Skip verification'
 complete -c vimm -n '__fish_seen_subcommand_from download' -l strict-hashes -d 'Strict hashes'

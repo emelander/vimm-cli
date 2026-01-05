@@ -8,7 +8,7 @@
 - Concurrent downloads with retries, rate limiting, and resume
 - Automatically uses the format selected by the site when multiple formats are offered
 - CRC/MD5/SHA1 verification using `Vimm’s Lair.txt`
-- Region filtering with tag-based excludes (defaults to USA, excludes Virtual Console and LodgeNet; use `--include-tags` to allow them)
+- Region filtering with variant-based excludes (defaults to USA, excludes Virtual Console and LodgeNet; use `--include-variants` to allow them)
 - JSON or plain text output
 
 ### Installation
@@ -33,7 +33,7 @@ go install github.com/emelander/vimm-download/cmd/vimm@latest
 ./vimm search --system N64 --query "*mario*"
 
 # Include non-USA regions or special variants
-./vimm search --system N64 --query "*fox*" --region all --include-tags all
+./vimm search --system N64 --query "*fox*" --region all --include-variants all
 
 # Download a few matches
 ./vimm download --system N64 --query "*mario*" --output-dir ./roms

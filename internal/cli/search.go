@@ -25,23 +25,23 @@ FLAGS:
   --limit <n>                   Max results (default: 100)
   --offset <n>                  Skip first N results (default: 0)
   --region <code>               Preferred region (default: USA, use "all" to disable)
-  --include-tags <tags>         Include excluded tags (comma-separated, default exclusions: "Virtual Console,LodgeNet"; use "all" to disable exclusions)
+  --include-variants <variants>  Include excluded variants (comma-separated, default exclusions: "Virtual Console,LodgeNet"; use "all" to disable exclusions)
   --no-header                   Hide column headers
   -h, --help                    Show help
 `
 
 func runSearch(cfg *Config, args []string) int {
 	var (
-		system      string
-		class       string
-		query       string
-		match       string
-		limit       int
-		offset      int
-		region      string
-		includeTags string
-		noHdr       bool
-		help        bool
+		system          string
+		class           string
+		query           string
+		match           string
+		limit           int
+		offset          int
+		region          string
+		includeVariants string
+		noHdr           bool
+		help            bool
 	)
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -52,7 +52,7 @@ func runSearch(cfg *Config, args []string) int {
 	fs.IntVar(&limit, "limit", 100, "limit results")
 	fs.IntVar(&offset, "offset", 0, "offset results")
 	fs.StringVar(&region, "region", "USA", "preferred region")
-	fs.StringVar(&includeTags, "include-tags", "", "include tags")
+	fs.StringVar(&includeVariants, "include-variants", "", "include variants")
 	fs.BoolVar(&noHdr, "no-header", false, "hide column headers")
 	fs.BoolVar(&help, "h", false, "show help")
 	fs.BoolVar(&help, "help", false, "show help")
@@ -157,7 +157,7 @@ func runSearch(cfg *Config, args []string) int {
 		return results[i].System < results[j].System
 	})
 
-	includeList, includeAll := parseIncludeTags(includeTags)
+	includeList, includeAll := parseIncludeTags(includeVariants)
 	filters := titleFilters{
 		Region:         normalizeRegion(region),
 		ExcludeTags:    defaultExcludedTags(),

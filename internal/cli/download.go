@@ -56,7 +56,7 @@ VERSION FLAGS:
   --latest                      Prefer latest revision (default: true)
   --revision <value>            Override latest (e.g., rev2 or 2021-05-01)
   --region <code>               Preferred region (default: USA, use "all" to disable)
-  --include-tags <tags>         Include excluded tags (comma-separated, default exclusions: "Virtual Console,LodgeNet"; use "all" to disable exclusions)
+  --include-variants <variants>  Include excluded variants (comma-separated, default exclusions: "Virtual Console,LodgeNet"; use "all" to disable exclusions)
 
 VERIFICATION FLAGS:
   --verify                      Verify CRC/MD5/SHA1 (default: true)
@@ -108,33 +108,33 @@ type downloadResult struct {
 
 func runDownload(cfg *Config, args []string) int {
 	var (
-		system        string
-		query         string
-		match         string
-		all           bool
-		ids           []string
-		outputDir     string
-		tmpDir        string
-		concurrency   int
-		retries       int
-		retryBackoff  string
-		timeout       time.Duration
-		maxRPS        int
-		resume        bool
-		overwrite     bool
-		dryRun        bool
-		latest        bool
-		revision      string
-		region        string
-		includeTags   string
-		verify        bool
-		skipVerify    bool
-		strictHashes  bool
-		countCheck    bool
-		strictCount   bool
-		allowMismatch bool
-		force         bool
-		help          bool
+		system          string
+		query           string
+		match           string
+		all             bool
+		ids             []string
+		outputDir       string
+		tmpDir          string
+		concurrency     int
+		retries         int
+		retryBackoff    string
+		timeout         time.Duration
+		maxRPS          int
+		resume          bool
+		overwrite       bool
+		dryRun          bool
+		latest          bool
+		revision        string
+		region          string
+		includeVariants string
+		verify          bool
+		skipVerify      bool
+		strictHashes    bool
+		countCheck      bool
+		strictCount     bool
+		allowMismatch   bool
+		force           bool
+		help            bool
 	)
 
 	runtimeCfg, err := loadRuntimeConfig(cfg.ConfigPath)
@@ -190,7 +190,7 @@ func runDownload(cfg *Config, args []string) int {
 	fs.BoolVar(&latest, "latest", true, "prefer latest")
 	fs.StringVar(&revision, "revision", "", "revision override")
 	fs.StringVar(&region, "region", "USA", "preferred region")
-	fs.StringVar(&includeTags, "include-tags", "", "include tags")
+	fs.StringVar(&includeVariants, "include-variants", "", "include variants")
 
 	fs.BoolVar(&verify, "verify", true, "verify hashes")
 	fs.BoolVar(&skipVerify, "skip-verify", false, "skip verification")
@@ -308,7 +308,7 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	applyFilters := query != ""
-	includeList, includeAll := parseIncludeTags(includeTags)
+	includeList, includeAll := parseIncludeTags(includeVariants)
 	filters := titleFilters{
 		Region:         normalizeRegion(region),
 		ExcludeTags:    defaultExcludedTags(),
