@@ -120,7 +120,7 @@ func runVerify(cfg *Config, args []string) int {
 			System: entry.System,
 		}
 
-		media, expected, _, title, _, _, err := prepareMedia(ctx, client, entry.ID, downloadOptions{Latest: true})
+		media, expected, _, title, _, alt, err := prepareMedia(ctx, client, entry.ID, downloadOptions{Latest: true})
 		if err != nil {
 			item.Error = err.Error()
 			summary.Failed++
@@ -130,6 +130,7 @@ func runVerify(cfg *Config, args []string) int {
 		if item.Title == "" && title != "" {
 			item.Title = title
 		}
+		item.Format = formatLabel(alt)
 
 		zipName := zipNameFromMedia(media)
 		if zipName == "" {

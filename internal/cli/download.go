@@ -95,6 +95,7 @@ type downloadResult struct {
 	VerifyFailed bool
 	Err          error
 	Title        string
+	Format       string
 }
 
 func runDownload(cfg *Config, args []string) int {
@@ -379,6 +380,7 @@ func runDownload(cfg *Config, args []string) int {
 			Skipped:  res.Skipped,
 			Verified: res.Verified,
 			Error:    errString(res.Err),
+			Format:   res.Format,
 		})
 		if res.Err != nil {
 			failed++
@@ -520,12 +522,13 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 	httpClient := &http.Client{Timeout: opts.Timeout}
 	for entry := range jobs {
 		res := downloadResult{Entry: entry}
-		path, title, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, entry)
+		path, title, format, skipped, verified, verifyFailed, err := downloadOne(ctx, client, httpClient, opts, limiter, logger, entry)
 		res.Path = path
 		res.Skipped = skipped
 		res.Verified = verified
 		res.VerifyFailed = verifyFailed
 		res.Err = err
+		res.Format = format
 		if title != "" {
 			res.Title = title
 		} else if entry.Title != "" {
@@ -535,14 +538,15 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 	}
 }
 
-func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, bool, bool, bool, error) {
+func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, string, bool, bool, bool, error) {
 	media, expected, referer, title, downloadBase, alt, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
-		return "", "", false, false, false, err
+		return "", "", "", false, false, false, err
 	}
 	if entry.Title == "" && title != "" {
 		entry.Title = title
 	}
+	format := formatLabel(alt)
 
 	zipName := zipNameFromMedia(media)
 	if zipName == "" {
@@ -553,11 +557,11 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	if !opts.Overwrite {
 		if _, err := os.Stat(outputPath); err == nil {
 			if !opts.Verify {
-				return outputPath, entry.Title, true, false, false, nil
+				return outputPath, entry.Title, format, true, false, false, nil
 			}
 			logger.verbosef("verifying existing %s\n", outputPath)
 			if err := verifyZip(outputPath, expected, opts.StrictHashes); err == nil {
-				return outputPath, entry.Title, true, true, false, nil
+				return outputPath, entry.Title, format, true, true, false, nil
 			}
 		}
 	}
@@ -582,9 +586,9 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	err = withRetries(attempt, opts.Retries, opts.RetryBackoff)
 	if err != nil {
-		return outputPath, entry.Title, false, false, verifyFailed, err
+		return outputPath, entry.Title, format, false, false, verifyFailed, err
 	}
-	return outputPath, entry.Title, false, opts.Verify, false, nil
+	return outputPath, entry.Title, format, false, opts.Verify, false, nil
 }
 
 func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, int, error) {
@@ -748,6 +752,17 @@ func normalizeAlt(alt int) int {
 		return alt
 	default:
 		return 0
+	}
+}
+
+func formatLabel(alt int) string {
+	switch normalizeAlt(alt) {
+	case 1:
+		return "alt"
+	case 2:
+		return "alt2"
+	default:
+		return "standard"
 	}
 }
 
