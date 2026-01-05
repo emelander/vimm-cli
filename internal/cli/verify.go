@@ -82,7 +82,18 @@ func runVerify(cfg *Config, args []string) int {
 		return exitUsage
 	}
 
-	client := vault.NewClient(resolveBaseURL())
+	runtimeCfg, err := loadRuntimeConfig(cfg.ConfigPath)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitUsage
+	}
+	if cfg.NoColor == false && runtimeCfg.NoColor != nil {
+		cfg.NoColor = *runtimeCfg.NoColor
+	}
+	if runtimeCfg.OutputDir != nil && *runtimeCfg.OutputDir != "" && outputDir == "." {
+		outputDir = *runtimeCfg.OutputDir
+	}
+	client := vault.NewClient(runtimeCfg.BaseURL)
 	ctx := context.Background()
 
 	entries, err := selectVerifyTargets(ctx, client, system, query, match, ids)

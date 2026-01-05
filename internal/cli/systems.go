@@ -47,7 +47,15 @@ func runSystems(cfg *Config, args []string) int {
 		return exitUsage
 	}
 
-	client := vault.NewClient(resolveBaseURL())
+	runtimeCfg, err := loadRuntimeConfig(cfg.ConfigPath)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitUsage
+	}
+	if cfg.NoColor == false && runtimeCfg.NoColor != nil {
+		cfg.NoColor = *runtimeCfg.NoColor
+	}
+	client := vault.NewClient(runtimeCfg.BaseURL)
 	ctx := context.Background()
 	systems, err := client.Systems(ctx)
 	if err != nil {

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/term"
 
 	"vimm-download/internal/vault"
 )
@@ -121,6 +125,36 @@ func runDownload(cfg *Config, args []string) int {
 		help          bool
 	)
 
+	runtimeCfg, err := loadRuntimeConfig(cfg.ConfigPath)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitUsage
+	}
+	if cfg.NoColor == false && runtimeCfg.NoColor != nil {
+		cfg.NoColor = *runtimeCfg.NoColor
+	}
+
+	outputDirDefault := "."
+	if runtimeCfg.OutputDir != nil && *runtimeCfg.OutputDir != "" {
+		outputDirDefault = *runtimeCfg.OutputDir
+	}
+	concurrencyDefault := 4
+	if runtimeCfg.Concurrency != nil {
+		concurrencyDefault = *runtimeCfg.Concurrency
+	}
+	retriesDefault := 5
+	if runtimeCfg.Retries != nil {
+		retriesDefault = *runtimeCfg.Retries
+	}
+	timeoutDefault := 60 * time.Second
+	if runtimeCfg.Timeout != nil {
+		timeoutDefault = *runtimeCfg.Timeout
+	}
+	maxRPSDefault := 0
+	if runtimeCfg.MaxRPS != nil {
+		maxRPSDefault = *runtimeCfg.MaxRPS
+	}
+
 	fs := flag.NewFlagSet("download", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&system, "system", "", "system slug")
@@ -129,14 +163,14 @@ func runDownload(cfg *Config, args []string) int {
 	fs.BoolVar(&all, "all", false, "download all")
 	fs.Var(&stringSliceFlag{values: &ids}, "id", "vault id (repeatable)")
 
-	fs.StringVar(&outputDir, "output-dir", ".", "output directory")
+	fs.StringVar(&outputDir, "output-dir", outputDirDefault, "output directory")
 	fs.StringVar(&tmpDir, "tmp-dir", "", "temp directory")
-	fs.IntVar(&concurrency, "concurrency", 4, "concurrency")
-	fs.IntVar(&concurrency, "c", 4, "concurrency")
-	fs.IntVar(&retries, "retries", 5, "retry count")
+	fs.IntVar(&concurrency, "concurrency", concurrencyDefault, "concurrency")
+	fs.IntVar(&concurrency, "c", concurrencyDefault, "concurrency")
+	fs.IntVar(&retries, "retries", retriesDefault, "retry count")
 	fs.StringVar(&retryBackoff, "retry-backoff", "exponential", "retry backoff")
-	fs.DurationVar(&timeout, "timeout", 60*time.Second, "timeout")
-	fs.IntVar(&maxRPS, "max-rps", 0, "rate limit")
+	fs.DurationVar(&timeout, "timeout", timeoutDefault, "timeout")
+	fs.IntVar(&maxRPS, "max-rps", maxRPSDefault, "rate limit")
 	fs.BoolVar(&resume, "resume", true, "resume partial downloads")
 	fs.BoolVar(&overwrite, "overwrite", false, "overwrite existing")
 	fs.BoolVar(&dryRun, "dry-run", false, "dry run")
@@ -233,7 +267,7 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	logger := &downloadLogger{cfg: cfg}
-	client := vault.NewClient(resolveBaseURL())
+	client := vault.NewClient(runtimeCfg.BaseURL)
 	ctx := context.Background()
 
 	entries, expectedCount, err := selectDownloadTargets(ctx, client, system, query, match, all, ids)
@@ -254,10 +288,35 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	if dryRun {
+		items := make([]downloadItem, 0, len(entries))
+		for _, entry := range entries {
+			items = append(items, downloadItem{
+				ID:     entry.ID,
+				Title:  entry.Title,
+				System: entry.System,
+			})
+		}
+		if cfg.JSON {
+			if err := outputDownloadSummary(cfg, downloadSummary{Items: items}); err != nil {
+				printError(os.Stderr, err)
+				return exitGeneric
+			}
+			return exitOK
+		}
 		for _, entry := range entries {
 			fmt.Fprintf(os.Stdout, "%d\t%s\n", entry.ID, entry.Title)
 		}
 		return exitOK
+	}
+
+	if all && !force {
+		if err := confirmAll(cfg, system, expectedCount); err != nil {
+			if errors.Is(err, errAborted) {
+				return exitOK
+			}
+			printError(os.Stderr, err)
+			return exitUsage
+		}
 	}
 
 	limiter := newRateLimiter(maxRPS)
@@ -354,6 +413,16 @@ func runDownload(cfg *Config, args []string) int {
 			return exitVerify
 		}
 		return exitPartial
+	}
+	if all && countCheck && expectedCount > 0 && !allowMismatch {
+		completed := verified
+		if !verify {
+			completed = downloaded + skipped
+		}
+		if completed != expectedCount {
+			printError(os.Stderr, fmt.Errorf("count mismatch: expected %d, got %d", expectedCount, completed))
+			return exitCountMismatch
+		}
 	}
 	return exitOK
 }
@@ -777,6 +846,30 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, err
 	}
 	return outputPath, nil
+}
+
+var errAborted = errors.New("aborted")
+
+func confirmAll(cfg *Config, system string, count int) error {
+	if cfg == nil {
+		return fmt.Errorf("confirmation required for --all")
+	}
+	if cfg.NoInput || !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("confirmation required for --all; use --force to proceed")
+	}
+	label := system
+	if count > 0 {
+		label = fmt.Sprintf("%s (%d titles)", system, count)
+	}
+	fmt.Fprintf(os.Stderr, "Download all titles for %s? [y/N]: ", label)
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer == "y" || answer == "yes" {
+		return nil
+	}
+	fmt.Fprintln(os.Stderr, "aborted")
+	return errAborted
 }
 
 func errString(err error) string {
