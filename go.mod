@@ -1,4 +1,4 @@
-module vimm-cli
+module github.com/emelander/vimm-cli
 
 go 1.25
 

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"vimm-cli/internal/vault"
+	"github.com/emelander/vimm-cli/internal/vault"
 )
 
 const verifyUsage = `vimm verify - verify local ROMs

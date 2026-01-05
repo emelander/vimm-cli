@@ -8,7 +8,7 @@ import (
 	"os"
 	"sort"
 
-	"vimm-cli/internal/vault"
+	"github.com/emelander/vimm-cli/internal/vault"
 )
 
 const searchUsage = `vimm search - search ROMs by name pattern

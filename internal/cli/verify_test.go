@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"vimm-cli/internal/vault"
+	"github.com/emelander/vimm-cli/internal/vault"
 )
 
 func TestVerifyZipStrict(t *testing.T) {
