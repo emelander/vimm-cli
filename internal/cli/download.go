@@ -93,6 +93,7 @@ type downloadOptions struct {
 	ApplyFilters   bool
 	DryRun         bool
 	RefererBase    string
+	DownloadGate   *downloadGate
 }
 
 type downloadResult struct {
@@ -400,6 +401,7 @@ func runDownload(cfg *Config, args []string) int {
 		DryRun:         dryRun,
 		RefererBase:    client.BaseURL,
 	}
+	opts.DownloadGate = newDownloadGate(1)
 
 	progress := newProgressManager(cfg, concurrency, len(entries))
 	logger.progress = progress
@@ -788,7 +790,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 			}
 			tracker.SetStatus(fmt.Sprintf("failed %d: %v", entry.ID, err))
 		}
-		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, tracker, logger)
+		path, err := downloadZip(ctx, httpClient, limiter, opts.DownloadGate, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, tracker, logger)
 		if err != nil {
 			setStatus(err)
 			return err
@@ -1036,11 +1038,17 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase, downloadMethod string, media vault.Media, outputPath, tmpDir string, resume bool, alt int, tracker *progressTracker, logger *downloadLogger) (string, error) {
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, gate *downloadGate, referer, downloadBase, downloadMethod string, media vault.Media, outputPath, tmpDir string, resume bool, alt int, tracker *progressTracker, logger *downloadLogger) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
 		}
+	}
+	if gate != nil {
+		if err := gate.Acquire(ctx); err != nil {
+			return outputPath, err
+		}
+		defer gate.Release()
 	}
 
 	params := url.Values{}
@@ -1431,6 +1439,40 @@ func retryDelayWithBase(attempt int, mode string, base time.Duration) time.Durat
 type rateLimiter struct {
 	ticker *time.Ticker
 	ch     <-chan time.Time
+}
+
+type downloadGate struct {
+	ch chan struct{}
+}
+
+func newDownloadGate(max int) *downloadGate {
+	if max <= 0 {
+		return nil
+	}
+	gate := &downloadGate{ch: make(chan struct{}, max)}
+	for i := 0; i < max; i++ {
+		gate.ch <- struct{}{}
+	}
+	return gate
+}
+
+func (g *downloadGate) Acquire(ctx context.Context) error {
+	if g == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-g.ch:
+		return nil
+	}
+}
+
+func (g *downloadGate) Release() {
+	if g == nil {
+		return
+	}
+	g.ch <- struct{}{}
 }
 
 func newRateLimiter(maxRPS int) *rateLimiter {
