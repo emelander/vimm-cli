@@ -42,13 +42,14 @@ jobs:
 
       - name: Build
         env:
+          VERSION: ${{ github.ref_name }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
           set -euo pipefail
           mkdir -p dist
-          go build -o "dist/vimm-${GOOS}-${GOARCH}${{ matrix.ext }}" ./cmd/vimm
+          go build -ldflags "-X github.com/emelander/vimm-cli/internal/cli.Version=${VERSION}" -o "dist/vimm-${GOOS}-${GOARCH}${{ matrix.ext }}" ./cmd/vimm
 
       - name: Package
         env:
