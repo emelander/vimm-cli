@@ -16,6 +16,12 @@ Requires Go 1.25.5.
 go build -o vimm ./cmd/vimm
 ```
 
+Or install directly with Go:
+
+```bash
+go install github.com/emelander/vimm-download/cmd/vimm@latest
+```
+
 ### Usage
 ```bash
 # List systems
