@@ -2,6 +2,7 @@ package vault
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,12 +13,21 @@ import (
 )
 
 const defaultBaseURL = "https://vimm.net/vault"
-const DefaultUserAgent = "Mozilla/5.0 (compatible; vimm-cli/0.1)"
+const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	Limiter    Limiter
+}
+
+type HTTPStatusError struct {
+	StatusCode int
+	Status     string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("unexpected HTTP status: %s", e.Status)
 }
 
 type Limiter interface {
@@ -55,7 +65,7 @@ func (c *Client) Fetch(ctx context.Context, path string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("unexpected HTTP status: %s", resp.Status)
+		return "", &HTTPStatusError{StatusCode: resp.StatusCode, Status: resp.Status}
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -161,6 +171,10 @@ func (c *Client) ListSection(ctx context.Context, slug, section string) ([]ROMEn
 	}
 	body, err := c.Fetch(ctx, path)
 	if err != nil {
+		var statusErr *HTTPStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return ParseSearchResults(strings.NewReader(body), slug)
