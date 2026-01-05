@@ -120,7 +120,7 @@ func runVerify(cfg *Config, args []string) int {
 			System: entry.System,
 		}
 
-		media, expected, _, title, err := prepareMedia(ctx, client, entry.ID, downloadOptions{Latest: true})
+		media, expected, _, title, _, err := prepareMedia(ctx, client, entry.ID, downloadOptions{Latest: true})
 		if err != nil {
 			item.Error = err.Error()
 			summary.Failed++

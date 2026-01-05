@@ -19,3 +19,11 @@ func TestDownloadAvailableVariants(t *testing.T) {
 		t.Fatalf("expected alt2 variant to be available")
 	}
 }
+
+func TestParseDownloadBaseFromPage(t *testing.T) {
+	html := `<form action="//dl3.vimm.net/" method="POST" id="dl_form"></form>`
+	got := ParseDownloadBaseFromPage(html)
+	if got != "https://dl3.vimm.net" {
+		t.Fatalf("expected https://dl3.vimm.net, got %q", got)
+	}
+}

@@ -94,11 +94,29 @@ func (c *Client) Search(ctx context.Context, slug, query string) ([]ROMEntry, er
 }
 
 func (c *Client) ROMMedia(ctx context.Context, id int) ([]Media, error) {
-	body, err := c.Fetch(ctx, "/"+strconv.Itoa(id))
+	page, err := c.ROMPage(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return ParseMediaFromPage(body)
+	return page.Media, nil
+}
+
+type ROMPage struct {
+	Media        []Media
+	DownloadBase string
+}
+
+func (c *Client) ROMPage(ctx context.Context, id int) (ROMPage, error) {
+	body, err := c.Fetch(ctx, "/"+strconv.Itoa(id))
+	if err != nil {
+		return ROMPage{}, err
+	}
+	media, err := ParseMediaFromPage(body)
+	if err != nil {
+		return ROMPage{}, err
+	}
+	downloadBase := ParseDownloadBaseFromPage(body)
+	return ROMPage{Media: media, DownloadBase: downloadBase}, nil
 }
 
 func (c *Client) ListAll(ctx context.Context, slug string) ([]ROMEntry, error) {

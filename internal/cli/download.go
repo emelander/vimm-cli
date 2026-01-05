@@ -553,7 +553,7 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 }
 
 func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, bool, bool, bool, error) {
-	media, expected, referer, title, err := prepareMedia(ctx, client, entry.ID, opts)
+	media, expected, referer, title, downloadBase, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
 		return "", "", false, false, false, err
 	}
@@ -581,7 +581,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, media, outputPath, opts.TmpDir, opts.Resume, opts.Alt)
+		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, media, outputPath, opts.TmpDir, opts.Resume, opts.Alt)
 		if err != nil {
 			return err
 		}
@@ -604,16 +604,16 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	return outputPath, entry.Title, false, opts.Verify, false, nil
 }
 
-func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, error) {
-	mediaList, err := client.ROMMedia(ctx, id)
+func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, error) {
+	page, err := client.ROMPage(ctx, id)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", err
+		return vault.Media{}, vault.Hashes{}, "", "", "", err
 	}
-	selected, err := selectMedia(mediaList, opts.Latest, opts.Revision, opts.Variant)
+	selected, err := selectMedia(page.Media, opts.Latest, opts.Revision, opts.Variant)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", err
+		return vault.Media{}, vault.Hashes{}, "", "", "", err
 	}
-	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), nil
+	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), page.DownloadBase, nil
 }
 
 func selectMedia(media []vault.Media, latest bool, revision string, variant string) (vault.Media, error) {
@@ -810,7 +810,7 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer string, media vault.Media, outputPath, tmpDir string, resume bool, alt int) (string, error) {
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase string, media vault.Media, outputPath, tmpDir string, resume bool, alt int) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
@@ -822,7 +822,11 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 	if alt > 0 {
 		params.Set("alt", strconv.Itoa(alt))
 	}
-	url := "https://dl2.vimm.net/?" + params.Encode()
+	base := strings.TrimRight(downloadBase, "/")
+	if base == "" {
+		base = "https://dl2.vimm.net"
+	}
+	url := base + "/?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return outputPath, err

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -47,6 +48,29 @@ func ParseMediaFromPage(html string) ([]Media, error) {
 		return nil, fmt.Errorf("parse media json: %w", err)
 	}
 	return media, nil
+}
+
+var dlFormRe = regexp.MustCompile(`(?i)<form[^>]*id="dl_form"[^>]*>`)
+var actionAttrRe = regexp.MustCompile(`(?i)\baction="([^"]+)"`)
+
+func ParseDownloadBaseFromPage(html string) string {
+	tag := dlFormRe.FindString(html)
+	if tag == "" {
+		return ""
+	}
+	match := actionAttrRe.FindStringSubmatch(tag)
+	if len(match) < 2 {
+		return ""
+	}
+	action := strings.TrimSpace(match[1])
+	if action == "" {
+		return ""
+	}
+	if strings.HasPrefix(action, "//") {
+		action = "https:" + action
+	}
+	action = strings.TrimRight(action, "/")
+	return action
 }
 
 func (m Media) ExpectedHashes() Hashes {
