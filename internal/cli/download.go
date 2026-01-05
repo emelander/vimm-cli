@@ -655,9 +655,6 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	if !opts.Overwrite {
 		if _, err := os.Stat(outputPath); err == nil {
-			if !opts.Verify {
-				return outputPath, entry.Title, format, true, false, false, nil
-			}
 			logger.verbosef("verifying existing %s\n", outputPath)
 			if err := verifyZip(outputPath, expected, opts.StrictHashes); err == nil {
 				return outputPath, entry.Title, format, true, true, false, nil
