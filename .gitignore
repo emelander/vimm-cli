@@ -1,0 +1,48 @@
+# Binaries
+/bin/
+/vimm
+/vimm.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build/test artifacts
+*.test
+*.out
+*.prof
+*.cover
+*.coverprofile
+*.trace
+*.pprof
+*.bench
+
+# Go workspace
+/go.work
+/go.work.sum
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*~
+*.bak
+.DS_Store
+
+# Temp/runtime
+.vimm.tmp/
+/tmp/
+
+# Release artifacts
+/dist/
+/release/
+*.zip
+*.tar.gz
+
+# Test output
+/coverage/
+
+# OS metadata
+Thumbs.db
+
