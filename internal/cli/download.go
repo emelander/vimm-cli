@@ -290,7 +290,7 @@ func runDownload(cfg *Config, args []string) int {
 	client.Limiter = limiter
 	ctx := context.Background()
 
-	entries, expectedCount, err := selectDownloadTargets(ctx, client, system, query, match, all, ids)
+	entries, expectedCount, err := selectDownloadTargets(ctx, client, logger, system, query, match, all, ids)
 	if err != nil {
 		printError(os.Stderr, err)
 		return exitNetwork
@@ -307,6 +307,7 @@ func runDownload(cfg *Config, args []string) int {
 	applyFilters := filtersActive && (query != "" || all)
 
 	if all && applyFilters {
+		logger.printf("filtering %d titles for region/variants (this can take a while)...\n", len(entries))
 		filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
 		if err != nil {
 			printError(os.Stderr, err)
@@ -507,7 +508,7 @@ func (l *downloadLogger) verbosef(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format, args...)
 }
 
-func selectDownloadTargets(ctx context.Context, client *vault.Client, system, query, match string, all bool, ids []string) ([]vault.ROMEntry, int, error) {
+func selectDownloadTargets(ctx context.Context, client *vault.Client, logger *downloadLogger, system, query, match string, all bool, ids []string) ([]vault.ROMEntry, int, error) {
 	if len(ids) > 0 {
 		entries := make([]vault.ROMEntry, 0, len(ids))
 		for _, raw := range ids {
@@ -521,7 +522,7 @@ func selectDownloadTargets(ctx context.Context, client *vault.Client, system, qu
 	}
 
 	if all {
-		entries, err := client.ListAll(ctx, system)
+		entries, err := listAllWithProgress(ctx, client, logger, system)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -569,6 +570,37 @@ func selectDownloadTargets(ctx context.Context, client *vault.Client, system, qu
 	})
 
 	return results, 0, nil
+}
+
+func listAllWithProgress(ctx context.Context, client *vault.Client, logger *downloadLogger, slug string) ([]vault.ROMEntry, error) {
+	sections := []string{"number"}
+	for letter := 'A'; letter <= 'Z'; letter++ {
+		sections = append(sections, string(letter))
+	}
+
+	total := len(sections)
+	entries := make([]vault.ROMEntry, 0, 1024)
+	seen := make(map[int]struct{})
+	for i, section := range sections {
+		label := section
+		if section == "number" {
+			label = "#"
+		}
+		logger.printf("listing %s section %d/%d (%s)\n", slug, i+1, total, label)
+		sectionEntries, err := client.ListSection(ctx, slug, section)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range sectionEntries {
+			if _, ok := seen[entry.ID]; ok {
+				continue
+			}
+			seen[entry.ID] = struct{}{}
+			entries = append(entries, entry)
+		}
+	}
+	logger.printf("found %d titles for %s\n", len(entries), slug)
+	return entries, nil
 }
 
 func workerDownload(ctx context.Context, client *vault.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, progress *progressManager, workerID int, jobs <-chan vault.ROMEntry, results chan<- downloadResult) {
