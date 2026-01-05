@@ -3,6 +3,7 @@ package cli
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestParseContentRangeTotal(t *testing.T) {
@@ -43,5 +44,18 @@ func TestTotalFromResponse(t *testing.T) {
 	}
 	if got := totalFromResponse(resp, 0); got != 80 {
 		t.Fatalf("expected 80, got %d", got)
+	}
+}
+
+func TestParseRetryAfterSeconds(t *testing.T) {
+	wait := parseRetryAfter("5")
+	if wait != 5*time.Second {
+		t.Fatalf("expected 5s, got %v", wait)
+	}
+	if parseRetryAfter("0") != 0 {
+		t.Fatalf("expected 0 for zero seconds")
+	}
+	if parseRetryAfter("invalid") != 0 {
+		t.Fatalf("expected 0 for invalid value")
 	}
 }

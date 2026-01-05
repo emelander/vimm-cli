@@ -1009,15 +1009,16 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			break
 		}
+		httpErr := wrapDownloadHTTPError(resp)
 		resp.Body.Close()
 		if m == http.MethodGet && method == http.MethodPost {
 			if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusBadRequest {
 				continue
 			}
-			return outputPath, fmt.Errorf("download failed: %s", resp.Status)
+			return outputPath, httpErr
 		}
 		if i == len(methods)-1 {
-			return outputPath, fmt.Errorf("download failed: %s", resp.Status)
+			return outputPath, httpErr
 		}
 	}
 	if resp == nil {
@@ -1068,6 +1069,18 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, err
 	}
 	return outputPath, nil
+}
+
+func wrapDownloadHTTPError(resp *http.Response) error {
+	if resp == nil {
+		return fmt.Errorf("download failed: no response")
+	}
+	err := fmt.Errorf("download failed: %s", resp.Status)
+	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable || retryAfter > 0 {
+		return &retryableError{err: err, statusCode: resp.StatusCode, retryAfter: retryAfter}
+	}
+	return err
 }
 
 type progressReader struct {
@@ -1228,6 +1241,27 @@ func compareHashes(expected, actual vault.Hashes) error {
 	return nil
 }
 
+func parseRetryAfter(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(value); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if parsed, err := http.ParseTime(value); err == nil {
+		wait := time.Until(parsed)
+		if wait < 0 {
+			return 0
+		}
+		return wait
+	}
+	return 0
+}
+
 func withRetries(fn func() error, retries int, mode string) error {
 	var err error
 	for attempt := 0; attempt <= retries; attempt++ {
@@ -1235,16 +1269,46 @@ func withRetries(fn func() error, retries int, mode string) error {
 		if err == nil {
 			return nil
 		}
-		if attempt == retries {
+		if attempt >= retries {
 			break
 		}
-		time.Sleep(retryDelay(attempt, mode))
+		time.Sleep(retryDelayForError(err, attempt, mode))
 	}
 	return err
 }
 
+type retryableError struct {
+	err        error
+	statusCode int
+	retryAfter time.Duration
+}
+
+func (e *retryableError) Error() string {
+	return e.err.Error()
+}
+
+func (e *retryableError) Unwrap() error {
+	return e.err
+}
+
+func retryDelayForError(err error, attempt int, mode string) time.Duration {
+	var retryErr *retryableError
+	if errors.As(err, &retryErr) {
+		if retryErr.retryAfter > 0 {
+			return retryErr.retryAfter
+		}
+		if retryErr.statusCode == http.StatusTooManyRequests || retryErr.statusCode == http.StatusServiceUnavailable {
+			return retryDelayWithBase(attempt, mode, 5*time.Second)
+		}
+	}
+	return retryDelay(attempt, mode)
+}
+
 func retryDelay(attempt int, mode string) time.Duration {
-	base := 1 * time.Second
+	return retryDelayWithBase(attempt, mode, time.Second)
+}
+
+func retryDelayWithBase(attempt int, mode string, base time.Duration) time.Duration {
 	jitter := time.Duration(rand.Intn(250)) * time.Millisecond
 	if mode == "linear" {
 		return time.Duration(attempt+1)*base + jitter
