@@ -81,7 +81,37 @@ func ParseDownloadBaseFromPage(html string) string {
 	return normalizeDownloadBase(match[1])
 }
 
+func ParseDownloadMethodFromPage(htmlText string) string {
+	doc, err := htmlpkg.Parse(strings.NewReader(htmlText))
+	if err != nil {
+		return ""
+	}
+	form := findDownloadForm(doc)
+	if form == nil {
+		return ""
+	}
+	for _, attr := range form.Attr {
+		if strings.EqualFold(attr.Key, "method") {
+			return strings.ToUpper(strings.TrimSpace(attr.Val))
+		}
+	}
+	return ""
+}
+
 func findDownloadFormAction(doc *htmlpkg.Node) string {
+	formNode := findDownloadForm(doc)
+	if formNode == nil {
+		return ""
+	}
+	for _, attr := range formNode.Attr {
+		if strings.EqualFold(attr.Key, "action") {
+			return strings.TrimSpace(attr.Val)
+		}
+	}
+	return ""
+}
+
+func findDownloadForm(doc *htmlpkg.Node) *htmlpkg.Node {
 	var formNode *htmlpkg.Node
 	var walk func(*htmlpkg.Node)
 	walk = func(n *htmlpkg.Node) {
@@ -101,15 +131,7 @@ func findDownloadFormAction(doc *htmlpkg.Node) string {
 		}
 	}
 	walk(doc)
-	if formNode == nil {
-		return ""
-	}
-	for _, attr := range formNode.Attr {
-		if strings.EqualFold(attr.Key, "action") {
-			return strings.TrimSpace(attr.Val)
-		}
-	}
-	return ""
+	return formNode
 }
 
 func normalizeDownloadBase(action string) string {

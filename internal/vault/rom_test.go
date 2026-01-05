@@ -34,6 +34,19 @@ func TestParseDownloadBaseFromPage(t *testing.T) {
 	}
 }
 
+func TestParseDownloadMethodFromPage(t *testing.T) {
+	html := `<form action="//dl3.vimm.net/" method="post" id="dl_form"></form>`
+	got := ParseDownloadMethodFromPage(html)
+	if got != "POST" {
+		t.Fatalf("expected POST, got %q", got)
+	}
+	html = `<form action="//dl3.vimm.net/" id="dl_form"></form>`
+	got = ParseDownloadMethodFromPage(html)
+	if got != "" {
+		t.Fatalf("expected empty method, got %q", got)
+	}
+}
+
 func TestParseDownloadAltFromPage(t *testing.T) {
 	html := `<select id="dl_format"><option value="0">JB</option><option value="1" selected>.dec.iso</option></select>`
 	if got := ParseDownloadAltFromPage(html); got != 1 {

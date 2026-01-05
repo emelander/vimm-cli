@@ -12,6 +12,7 @@ import (
 )
 
 const defaultBaseURL = "https://vimm.net/vault"
+const DefaultUserAgent = "Mozilla/5.0 (compatible; vimm-cli/0.1)"
 
 type Client struct {
 	BaseURL    string
@@ -46,7 +47,7 @@ func (c *Client) Fetch(ctx context.Context, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "vimm-cli/0.1")
+	req.Header.Set("User-Agent", DefaultUserAgent)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -102,9 +103,10 @@ func (c *Client) ROMMedia(ctx context.Context, id int) ([]Media, error) {
 }
 
 type ROMPage struct {
-	Media        []Media
-	DownloadBase string
-	DownloadAlt  int
+	Media          []Media
+	DownloadBase   string
+	DownloadAlt    int
+	DownloadMethod string
 }
 
 func (c *Client) ROMPage(ctx context.Context, id int) (ROMPage, error) {
@@ -118,7 +120,8 @@ func (c *Client) ROMPage(ctx context.Context, id int) (ROMPage, error) {
 	}
 	downloadBase := ParseDownloadBaseFromPage(body)
 	downloadAlt := ParseDownloadAltFromPage(body)
-	return ROMPage{Media: media, DownloadBase: downloadBase, DownloadAlt: downloadAlt}, nil
+	downloadMethod := ParseDownloadMethodFromPage(body)
+	return ROMPage{Media: media, DownloadBase: downloadBase, DownloadAlt: downloadAlt, DownloadMethod: downloadMethod}, nil
 }
 
 func (c *Client) ListAll(ctx context.Context, slug string) ([]ROMEntry, error) {

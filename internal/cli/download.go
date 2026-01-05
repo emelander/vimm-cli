@@ -540,7 +540,7 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 }
 
 func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, string, bool, bool, bool, error) {
-	media, expected, referer, title, downloadBase, alt, err := prepareMedia(ctx, client, entry.ID, opts)
+	media, expected, referer, title, downloadBase, downloadMethod, alt, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
 		return "", "", "", false, false, false, err
 	}
@@ -569,7 +569,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, media, outputPath, opts.TmpDir, opts.Resume, alt)
+		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, downloadMethod, media, outputPath, opts.TmpDir, opts.Resume, alt, logger)
 		if err != nil {
 			return err
 		}
@@ -592,16 +592,16 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	return outputPath, entry.Title, format, false, opts.Verify, false, nil
 }
 
-func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, int, error) {
+func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, string, int, error) {
 	page, err := client.ROMPage(ctx, id)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", "", 0, err
+		return vault.Media{}, vault.Hashes{}, "", "", "", "", 0, err
 	}
 	selected, alt, err := selectMedia(page.Media, opts.Latest, opts.Revision, page.DownloadAlt)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", "", 0, err
+		return vault.Media{}, vault.Hashes{}, "", "", "", "", 0, err
 	}
-	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), page.DownloadBase, alt, nil
+	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), page.DownloadBase, page.DownloadMethod, alt, nil
 }
 
 func selectMedia(media []vault.Media, latest bool, revision string, alt int) (vault.Media, int, error) {
@@ -815,7 +815,7 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase string, media vault.Media, outputPath, tmpDir string, resume bool, alt int) (string, error) {
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer, downloadBase, downloadMethod string, media vault.Media, outputPath, tmpDir string, resume bool, alt int, logger *downloadLogger) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
@@ -831,16 +831,6 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 	if base == "" {
 		base = "https://dl2.vimm.net"
 	}
-	url := base + "/?" + params.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return outputPath, err
-	}
-	req.Header.Set("User-Agent", "vimm-cli/0.1")
-	if referer != "" {
-		req.Header.Set("Referer", referer)
-	}
-
 	tmpPath := filepath.Join(tmpDir, filepath.Base(outputPath)+".part")
 	var resumeFrom int64
 	if resume {
@@ -848,27 +838,77 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 			resumeFrom = info.Size()
 		}
 	}
-	if resumeFrom > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumeFrom))
+	method := strings.ToUpper(strings.TrimSpace(downloadMethod))
+	if method == "" {
+		method = http.MethodGet
+	}
+	methods := []string{method}
+	if method == http.MethodPost {
+		methods = []string{http.MethodGet, http.MethodPost}
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return outputPath, err
+	var resp *http.Response
+	var err error
+	for i, m := range methods {
+		resumeSupported := m == http.MethodGet
+		if resumeFrom > 0 && !resumeSupported {
+			if logger != nil {
+				logger.verbosef("resume not supported for %s; restarting download\n", m)
+			}
+			_ = os.Remove(tmpPath)
+			resumeFrom = 0
+		}
+
+		var req *http.Request
+		if m == http.MethodPost {
+			requestURL := base + "/"
+			body := strings.NewReader(params.Encode())
+			req, err = http.NewRequestWithContext(ctx, http.MethodPost, requestURL, body)
+			if err != nil {
+				return outputPath, err
+			}
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		} else {
+			requestURL := base + "/?" + params.Encode()
+			req, err = http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+			if err != nil {
+				return outputPath, err
+			}
+		}
+		req.Header.Set("User-Agent", vault.DefaultUserAgent)
+		if referer != "" {
+			req.Header.Set("Referer", referer)
+		}
+		if resumeFrom > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumeFrom))
+		}
+
+		resp, err = httpClient.Do(req)
+		if err != nil {
+			return outputPath, err
+		}
+		if resumeFrom > 0 && resp.StatusCode == http.StatusOK {
+			// Server ignored range, restart from scratch.
+			_ = os.Remove(tmpPath)
+			resumeFrom = 0
+		}
+		if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+			_ = os.Remove(tmpPath)
+			resp.Body.Close()
+			return outputPath, fmt.Errorf("resume failed: range not satisfiable")
+		}
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			break
+		}
+		resp.Body.Close()
+		if i == len(methods)-1 {
+			return outputPath, fmt.Errorf("download failed: %s", resp.Status)
+		}
+	}
+	if resp == nil {
+		return outputPath, fmt.Errorf("download failed: no response")
 	}
 	defer resp.Body.Close()
-	if resumeFrom > 0 && resp.StatusCode == http.StatusOK {
-		// Server ignored range, restart from scratch.
-		_ = os.Remove(tmpPath)
-		resumeFrom = 0
-	}
-	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
-		_ = os.Remove(tmpPath)
-		return outputPath, fmt.Errorf("resume failed: range not satisfiable")
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return outputPath, fmt.Errorf("download failed: %s", resp.Status)
-	}
 
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return outputPath, err
