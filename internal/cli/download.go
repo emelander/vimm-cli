@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -894,7 +895,7 @@ func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimi
 		return outputPath, closeErr
 	}
 
-	if err := os.Rename(tmpPath, outputPath); err != nil {
+	if err := moveFile(tmpPath, outputPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return outputPath, err
 	}
@@ -932,8 +933,43 @@ func errString(err error) string {
 	return err.Error()
 }
 
+func moveFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else if linkErr, ok := err.(*os.LinkError); !ok || !errors.Is(linkErr.Err, syscall.EXDEV) {
+		return err
+	}
+	if err := copyFile(src, dst); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	syncErr := out.Sync()
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if syncErr != nil {
+		return syncErr
+	}
+	return closeErr
+}
+
 func verifyZip(path string, expected vault.Hashes, strict bool) error {
-	lair, lairErr := vault.ReadLairHashesFromZip(path)
+	lair, lairErr := vault.ReadLairHashesFromArchive(path)
 	if lairErr != nil && strict {
 		return lairErr
 	}
@@ -949,7 +985,7 @@ func verifyZip(path string, expected vault.Hashes, strict bool) error {
 		return fmt.Errorf("missing hashes for verification")
 	}
 
-	actual, _, err := vault.ComputeROMHashesFromZip(path)
+	actual, _, err := vault.ComputeROMHashesFromArchive(path)
 	if err != nil {
 		return err
 	}

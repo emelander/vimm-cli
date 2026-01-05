@@ -46,6 +46,9 @@ func ExtractRomNameFromLair(data []byte) string {
 		if strings.Contains(line, ":") {
 			continue
 		}
+		if looksLikeURL(line) {
+			continue
+		}
 		ext := filepath.Ext(line)
 		if len(ext) < 2 || len(ext) > 6 {
 			continue
@@ -53,4 +56,37 @@ func ExtractRomNameFromLair(data []byte) string {
 		return line
 	}
 	return ""
+}
+
+func FindRomNameInLair(data []byte, candidates []string) string {
+	if len(candidates) == 0 {
+		return ExtractRomNameFromLair(data)
+	}
+	candidateMap := make(map[string]string, len(candidates))
+	for _, name := range candidates {
+		base := strings.ToLower(filepath.Base(name))
+		if base != "" {
+			candidateMap[base] = name
+		}
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, ":") || looksLikeURL(line) {
+			continue
+		}
+		if match, ok := candidateMap[strings.ToLower(line)]; ok {
+			return match
+		}
+		base := filepath.Base(line)
+		if match, ok := candidateMap[strings.ToLower(base)]; ok {
+			return match
+		}
+	}
+	return ExtractRomNameFromLair(data)
+}
+
+func looksLikeURL(line string) bool {
+	lower := strings.ToLower(line)
+	return strings.Contains(lower, "://") || strings.Contains(lower, "vimm.net") || strings.HasPrefix(lower, "www.")
 }

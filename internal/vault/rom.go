@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/net/html"
+	htmlpkg "golang.org/x/net/html"
 )
 
 type GoodDate struct {
@@ -35,17 +35,22 @@ type Media struct {
 }
 
 func ParseMediaFromPage(html string) ([]Media, error) {
-	const marker = "const media="
-	start := strings.Index(html, marker)
-	if start == -1 {
-		return nil, fmt.Errorf("media array not found")
+	jsonBlob := ""
+	if match := mediaRe.FindStringSubmatch(html); len(match) >= 2 {
+		jsonBlob = strings.TrimSpace(match[1])
+	} else {
+		const marker = "const media="
+		start := strings.Index(html, marker)
+		if start == -1 {
+			return nil, fmt.Errorf("media array not found")
+		}
+		start += len(marker)
+		end := strings.Index(html[start:], "];")
+		if end == -1 {
+			return nil, fmt.Errorf("media array terminator not found")
+		}
+		jsonBlob = strings.TrimSpace(html[start : start+end+1])
 	}
-	start += len(marker)
-	end := strings.Index(html[start:], "];")
-	if end == -1 {
-		return nil, fmt.Errorf("media array terminator not found")
-	}
-	jsonBlob := strings.TrimSpace(html[start : start+end+1])
 	var media []Media
 	if err := json.Unmarshal([]byte(jsonBlob), &media); err != nil {
 		return nil, fmt.Errorf("parse media json: %w", err)
@@ -53,10 +58,18 @@ func ParseMediaFromPage(html string) ([]Media, error) {
 	return media, nil
 }
 
+var mediaRe = regexp.MustCompile(`(?s)const\s+media\s*=\s*(\[[^;]*?\]);`)
+
 var dlFormRe = regexp.MustCompile(`(?i)<form[^>]*id="dl_form"[^>]*>`)
-var actionAttrRe = regexp.MustCompile(`(?i)\baction="([^"]+)"`)
+var actionAttrRe = regexp.MustCompile(`(?i)\baction=['"]([^'"]+)['"]`)
 
 func ParseDownloadBaseFromPage(html string) string {
+	doc, err := htmlpkg.Parse(strings.NewReader(html))
+	if err == nil {
+		if action := findDownloadFormAction(doc); action != "" {
+			return normalizeDownloadBase(action)
+		}
+	}
 	tag := dlFormRe.FindString(html)
 	if tag == "" {
 		return ""
@@ -65,7 +78,42 @@ func ParseDownloadBaseFromPage(html string) string {
 	if len(match) < 2 {
 		return ""
 	}
-	action := strings.TrimSpace(match[1])
+	return normalizeDownloadBase(match[1])
+}
+
+func findDownloadFormAction(doc *htmlpkg.Node) string {
+	var formNode *htmlpkg.Node
+	var walk func(*htmlpkg.Node)
+	walk = func(n *htmlpkg.Node) {
+		if formNode != nil {
+			return
+		}
+		if n.Type == htmlpkg.ElementNode && n.Data == "form" {
+			for _, attr := range n.Attr {
+				if strings.EqualFold(attr.Key, "id") && attr.Val == "dl_form" {
+					formNode = n
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	if formNode == nil {
+		return ""
+	}
+	for _, attr := range formNode.Attr {
+		if strings.EqualFold(attr.Key, "action") {
+			return strings.TrimSpace(attr.Val)
+		}
+	}
+	return ""
+}
+
+func normalizeDownloadBase(action string) string {
+	action = strings.TrimSpace(action)
 	if action == "" {
 		return ""
 	}
@@ -77,17 +125,17 @@ func ParseDownloadBaseFromPage(html string) string {
 }
 
 func ParseDownloadAltFromPage(htmlText string) int {
-	doc, err := html.Parse(strings.NewReader(htmlText))
+	doc, err := htmlpkg.Parse(strings.NewReader(htmlText))
 	if err != nil {
 		return 0
 	}
-	var selectNode *html.Node
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
+	var selectNode *htmlpkg.Node
+	var walk func(*htmlpkg.Node)
+	walk = func(n *htmlpkg.Node) {
 		if selectNode != nil {
 			return
 		}
-		if n.Type == html.ElementNode && n.Data == "select" {
+		if n.Type == htmlpkg.ElementNode && n.Data == "select" {
 			for _, attr := range n.Attr {
 				if strings.EqualFold(attr.Key, "id") && attr.Val == "dl_format" {
 					selectNode = n
@@ -107,7 +155,7 @@ func ParseDownloadAltFromPage(htmlText string) int {
 	first := -1
 	selected := -1
 	for c := selectNode.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type != html.ElementNode || c.Data != "option" {
+		if c.Type != htmlpkg.ElementNode || c.Data != "option" {
 			continue
 		}
 		value := ""

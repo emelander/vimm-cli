@@ -26,6 +26,12 @@ func TestParseDownloadBaseFromPage(t *testing.T) {
 	if got != "https://dl3.vimm.net" {
 		t.Fatalf("expected https://dl3.vimm.net, got %q", got)
 	}
+
+	html = "<form id='dl_form'\n action='//dl2.vimm.net/' method='POST'></form>"
+	got = ParseDownloadBaseFromPage(html)
+	if got != "https://dl2.vimm.net" {
+		t.Fatalf("expected https://dl2.vimm.net, got %q", got)
+	}
 }
 
 func TestParseDownloadAltFromPage(t *testing.T) {
