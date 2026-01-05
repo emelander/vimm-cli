@@ -54,7 +54,6 @@ DOWNLOAD FLAGS:
 VERSION FLAGS:
   --latest                      Prefer latest revision (default: true)
   --revision <value>            Override latest (e.g., rev2 or 2021-05-01)
-  --variant <standard|alt|alt2> Download format variant (default: standard)
 
 VERIFICATION FLAGS:
   --verify                      Verify CRC/MD5/SHA1 (default: true)
@@ -86,8 +85,6 @@ type downloadOptions struct {
 	Revision     string
 	DryRun       bool
 	RefererBase  string
-	Variant      string
-	Alt          int
 }
 
 type downloadResult struct {
@@ -119,7 +116,6 @@ func runDownload(cfg *Config, args []string) int {
 		dryRun        bool
 		latest        bool
 		revision      string
-		variant       string
 		verify        bool
 		skipVerify    bool
 		strictHashes  bool
@@ -182,7 +178,6 @@ func runDownload(cfg *Config, args []string) int {
 
 	fs.BoolVar(&latest, "latest", true, "prefer latest")
 	fs.StringVar(&revision, "revision", "", "revision override")
-	fs.StringVar(&variant, "variant", "standard", "download variant")
 
 	fs.BoolVar(&verify, "verify", true, "verify hashes")
 	fs.BoolVar(&skipVerify, "skip-verify", false, "skip verification")
@@ -207,10 +202,6 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	if err := validateMatch(match); err != nil {
-		printError(os.Stderr, err)
-		return exitUsage
-	}
-	if err := validateVariant(variant); err != nil {
 		printError(os.Stderr, err)
 		return exitUsage
 	}
@@ -245,12 +236,6 @@ func runDownload(cfg *Config, args []string) int {
 	}
 	if revision != "" {
 		latest = false
-	}
-	variant = normalizeVariant(variant)
-	altVariant, err := variantAlt(variant)
-	if err != nil {
-		printError(os.Stderr, err)
-		return exitUsage
 	}
 
 	if concurrency < 1 {
@@ -356,8 +341,6 @@ func runDownload(cfg *Config, args []string) int {
 		Revision:     revision,
 		DryRun:       dryRun,
 		RefererBase:  client.BaseURL,
-		Variant:      variant,
-		Alt:          altVariant,
 	}
 
 	jobs := make(chan vault.ROMEntry)
@@ -553,7 +536,7 @@ func workerDownload(ctx context.Context, client *vault.Client, opts downloadOpti
 }
 
 func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Client, opts downloadOptions, limiter *rateLimiter, logger *downloadLogger, entry vault.ROMEntry) (string, string, bool, bool, bool, error) {
-	media, expected, referer, title, downloadBase, err := prepareMedia(ctx, client, entry.ID, opts)
+	media, expected, referer, title, downloadBase, alt, err := prepareMedia(ctx, client, entry.ID, opts)
 	if err != nil {
 		return "", "", false, false, false, err
 	}
@@ -581,7 +564,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, media, outputPath, opts.TmpDir, opts.Resume, opts.Alt)
+		path, err := downloadZip(ctx, httpClient, limiter, referer, downloadBase, media, outputPath, opts.TmpDir, opts.Resume, alt)
 		if err != nil {
 			return err
 		}
@@ -604,47 +587,65 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 	return outputPath, entry.Title, false, opts.Verify, false, nil
 }
 
-func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, error) {
+func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downloadOptions) (vault.Media, vault.Hashes, string, string, string, int, error) {
 	page, err := client.ROMPage(ctx, id)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", "", err
+		return vault.Media{}, vault.Hashes{}, "", "", "", 0, err
 	}
-	selected, err := selectMedia(page.Media, opts.Latest, opts.Revision, opts.Variant)
+	selected, alt, err := selectMedia(page.Media, opts.Latest, opts.Revision, page.DownloadAlt)
 	if err != nil {
-		return vault.Media{}, vault.Hashes{}, "", "", "", err
+		return vault.Media{}, vault.Hashes{}, "", "", "", 0, err
 	}
-	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), page.DownloadBase, nil
+	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), page.DownloadBase, alt, nil
 }
 
-func selectMedia(media []vault.Media, latest bool, revision string, variant string) (vault.Media, error) {
-	available := make([]vault.Media, 0, len(media))
-	for _, item := range media {
-		if item.DownloadAvailable(variant) {
-			available = append(available, item)
-		}
-	}
-	if len(available) == 0 {
-		return vault.Media{}, fmt.Errorf("no downloadable media found for variant %q", variant)
-	}
-
-	if revision != "" {
-		for _, item := range available {
-			if matchesRevision(item, revision) {
-				return item, nil
+func selectMedia(media []vault.Media, latest bool, revision string, alt int) (vault.Media, int, error) {
+	alt = normalizeAlt(alt)
+	selectWithAlt := func(targetAlt int) (vault.Media, bool, error) {
+		available := make([]vault.Media, 0, len(media))
+		for _, item := range media {
+			if item.DownloadAvailableAlt(targetAlt) {
+				available = append(available, item)
 			}
 		}
-		return vault.Media{}, fmt.Errorf("revision %q not found", revision)
+		if len(available) == 0 {
+			return vault.Media{}, false, fmt.Errorf("no downloadable media found for alt=%d", targetAlt)
+		}
+
+		if revision != "" {
+			for _, item := range available {
+				if matchesRevision(item, revision) {
+					return item, true, nil
+				}
+			}
+			return vault.Media{}, false, fmt.Errorf("revision %q not found", revision)
+		}
+
+		if !latest {
+			return available[0], true, nil
+		}
+
+		sort.Slice(available, func(i, j int) bool {
+			return mediaNewer(available[i], available[j])
+		})
+
+		return available[0], true, nil
 	}
 
-	if !latest {
-		return available[0], nil
+	selected, ok, err := selectWithAlt(alt)
+	if err == nil {
+		return selected, alt, nil
 	}
-
-	sort.Slice(available, func(i, j int) bool {
-		return mediaNewer(available[i], available[j])
-	})
-
-	return available[0], nil
+	if alt != 0 {
+		fallback, okFallback, errFallback := selectWithAlt(0)
+		if errFallback == nil && okFallback {
+			return fallback, 0, nil
+		}
+		if ok || okFallback {
+			return vault.Media{}, 0, errFallback
+		}
+	}
+	return vault.Media{}, 0, err
 }
 
 func matchesRevision(media vault.Media, revision string) bool {
@@ -741,24 +742,12 @@ func compareVersion(a, b version) int {
 	return 0
 }
 
-func normalizeVariant(value string) string {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if value == "" {
-		return "standard"
-	}
-	return value
-}
-
-func variantAlt(value string) (int, error) {
-	switch normalizeVariant(value) {
-	case "standard":
-		return 0, nil
-	case "alt":
-		return 1, nil
-	case "alt2":
-		return 2, nil
+func normalizeAlt(alt int) int {
+	switch alt {
+	case 1, 2:
+		return alt
 	default:
-		return 0, fmt.Errorf("invalid --variant value: %s", value)
+		return 0
 	}
 }
 

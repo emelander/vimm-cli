@@ -6,6 +6,7 @@
 - Search by name or download by vault ID
 - Bulk downloads per system with count checks
 - Concurrent downloads with retries, rate limiting, and resume
+- Automatically uses the format selected by the site when multiple formats are offered
 - CRC/MD5/SHA1 verification using `Vimm’s Lair.txt`
 - JSON or plain text output
 
@@ -35,9 +36,6 @@ go install github.com/emelander/vimm-download/cmd/vimm@latest
 
 # Download all ROMs for a system (confirmation required)
 ./vimm download --system N64 --all
-
-# Download an alternate variant when available
-./vimm download --system N64 --query "*mario*" --variant alt
 
 # Verify local files
 ./vimm verify --system N64 --output-dir ./roms --query "*fox*"

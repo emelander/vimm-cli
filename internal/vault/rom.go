@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 type GoodDate struct {
@@ -73,6 +76,73 @@ func ParseDownloadBaseFromPage(html string) string {
 	return action
 }
 
+func ParseDownloadAltFromPage(htmlText string) int {
+	doc, err := html.Parse(strings.NewReader(htmlText))
+	if err != nil {
+		return 0
+	}
+	var selectNode *html.Node
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if selectNode != nil {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "select" {
+			for _, attr := range n.Attr {
+				if strings.EqualFold(attr.Key, "id") && attr.Val == "dl_format" {
+					selectNode = n
+					return
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	if selectNode == nil {
+		return 0
+	}
+
+	first := -1
+	selected := -1
+	for c := selectNode.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != html.ElementNode || c.Data != "option" {
+			continue
+		}
+		value := ""
+		isSelected := false
+		for _, attr := range c.Attr {
+			switch strings.ToLower(attr.Key) {
+			case "value":
+				value = strings.TrimSpace(attr.Val)
+			case "selected":
+				isSelected = true
+			}
+		}
+		if value == "" {
+			continue
+		}
+		alt, err := strconv.Atoi(value)
+		if err != nil {
+			continue
+		}
+		if first == -1 {
+			first = alt
+		}
+		if isSelected {
+			selected = alt
+		}
+	}
+	if selected != -1 {
+		return normalizeAlt(selected)
+	}
+	if first != -1 {
+		return normalizeAlt(first)
+	}
+	return 0
+}
+
 func (m Media) ExpectedHashes() Hashes {
 	crc := firstNonEmpty(m.GoodHash, m.Crc)
 	md5 := firstNonEmpty(m.GoodMd5, m.Md5)
@@ -99,13 +169,11 @@ func (m Media) ZippedAvailable() bool {
 	return parseNumeric(m.Zipped) > 0
 }
 
-func (m Media) DownloadAvailable(variant string) bool {
-	switch strings.ToLower(strings.TrimSpace(variant)) {
-	case "", "standard":
-		return parseNumeric(m.Zipped) > 0
-	case "alt":
+func (m Media) DownloadAvailableAlt(alt int) bool {
+	switch alt {
+	case 1:
 		return parseNumeric(m.AltZipped) > 0
-	case "alt2":
+	case 2:
 		return parseNumeric(m.AltZipped2) > 0
 	default:
 		return parseNumeric(m.Zipped) > 0
@@ -125,6 +193,15 @@ func parseNumeric(value string) int {
 		n = n*10 + int(r-'0')
 	}
 	return n
+}
+
+func normalizeAlt(alt int) int {
+	switch alt {
+	case 1, 2:
+		return alt
+	default:
+		return 0
+	}
 }
 
 func firstNonEmpty(values ...string) string {

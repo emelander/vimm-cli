@@ -104,6 +104,7 @@ func (c *Client) ROMMedia(ctx context.Context, id int) ([]Media, error) {
 type ROMPage struct {
 	Media        []Media
 	DownloadBase string
+	DownloadAlt  int
 }
 
 func (c *Client) ROMPage(ctx context.Context, id int) (ROMPage, error) {
@@ -116,7 +117,8 @@ func (c *Client) ROMPage(ctx context.Context, id int) (ROMPage, error) {
 		return ROMPage{}, err
 	}
 	downloadBase := ParseDownloadBaseFromPage(body)
-	return ROMPage{Media: media, DownloadBase: downloadBase}, nil
+	downloadAlt := ParseDownloadAltFromPage(body)
+	return ROMPage{Media: media, DownloadBase: downloadBase, DownloadAlt: downloadAlt}, nil
 }
 
 func (c *Client) ListAll(ctx context.Context, slug string) ([]ROMEntry, error) {
