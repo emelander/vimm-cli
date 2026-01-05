@@ -394,6 +394,7 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	progress := newProgressManager(cfg, concurrency, len(entries))
+	logger.progress = progress
 	jobs := make(chan vault.ROMEntry)
 	results := make(chan downloadResult)
 	var wg sync.WaitGroup
@@ -486,26 +487,37 @@ func runDownload(cfg *Config, args []string) int {
 }
 
 type downloadLogger struct {
-	cfg *Config
-	mu  sync.Mutex
+	cfg      *Config
+	progress *progressManager
+	mu       sync.Mutex
 }
 
 func (l *downloadLogger) printf(format string, args ...any) {
 	if l == nil || l.cfg == nil || l.cfg.Quiet {
 		return
 	}
+	msg := fmt.Sprintf(format, args...)
+	if l.progress != nil {
+		l.progress.PrintLine(msg)
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(os.Stderr, format, args...)
+	fmt.Fprint(os.Stderr, msg)
 }
 
 func (l *downloadLogger) verbosef(format string, args ...any) {
 	if l == nil || l.cfg == nil || l.cfg.Verbose == 0 {
 		return
 	}
+	msg := fmt.Sprintf(format, args...)
+	if l.progress != nil {
+		l.progress.PrintLine(msg)
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(os.Stderr, format, args...)
+	fmt.Fprint(os.Stderr, msg)
 }
 
 func selectDownloadTargets(ctx context.Context, client *vault.Client, logger *downloadLogger, system, query, match string, all bool, ids []string) ([]vault.ROMEntry, int, error) {

@@ -20,6 +20,7 @@ const (
 type progressManager struct {
 	writer     io.Writer
 	mu         sync.Mutex
+	outputMu   sync.Mutex
 	slots      []progressSlot
 	doneBytes  int64
 	doneTotal  int64
@@ -249,6 +250,15 @@ func (pm *progressManager) writeLines(lines []string) {
 	if pm == nil {
 		return
 	}
+	pm.outputMu.Lock()
+	defer pm.outputMu.Unlock()
+	pm.writeLinesLocked(lines)
+}
+
+func (pm *progressManager) writeLinesLocked(lines []string) {
+	if pm == nil {
+		return
+	}
 	lineCount := len(lines)
 	if pm.lastLines > lineCount {
 		for i := lineCount; i < pm.lastLines; i++ {
@@ -276,10 +286,36 @@ func (pm *progressManager) clearLines() {
 	if pm == nil || pm.lastLines == 0 {
 		return
 	}
+	pm.outputMu.Lock()
+	defer pm.outputMu.Unlock()
+	pm.clearLinesLocked(true)
+}
+
+func (pm *progressManager) clearLinesLocked(withNewline bool) {
+	if pm == nil || pm.lastLines == 0 {
+		return
+	}
 	lines := make([]string, pm.lastLines)
 	pm.lastLines = 0
-	pm.writeLines(lines)
-	_, _ = io.WriteString(pm.writer, "\n")
+	pm.writeLinesLocked(lines)
+	if withNewline {
+		_, _ = io.WriteString(pm.writer, "\n")
+	}
+}
+
+func (pm *progressManager) PrintLine(line string) {
+	if pm == nil {
+		return
+	}
+	lines := pm.snapshotLines()
+	pm.outputMu.Lock()
+	defer pm.outputMu.Unlock()
+	pm.clearLinesLocked(false)
+	if !strings.HasSuffix(line, "\n") {
+		line += "\n"
+	}
+	_, _ = io.WriteString(pm.writer, line)
+	pm.writeLinesLocked(lines)
 }
 
 func formatProgressLine(title string, current, total int64, speed float64, now time.Time, started time.Time) string {
