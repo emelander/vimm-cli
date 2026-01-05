@@ -101,6 +101,7 @@ func (pt *progressTracker) Reset(title string) {
 		active:     true,
 		started:    time.Now(),
 		startBytes: 0,
+		status:     "",
 	}
 	pt.pm.mu.Unlock()
 }
