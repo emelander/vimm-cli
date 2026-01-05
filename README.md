@@ -59,7 +59,7 @@ Config files:
 Environment variables (defaults in parentheses):
 - `VIMM_BASE_URL` (default: `https://vimm.net/vault`)
 - `VIMM_OUTPUT_DIR` (default: `.`)
-- `VIMM_CONCURRENCY` (default: `4`)
+- `VIMM_CONCURRENCY` (default: `1`)
 - `VIMM_RETRIES` (default: `5`)
 - `VIMM_TIMEOUT` (default: `60s`)
 - `VIMM_MAX_RPS` (default: `0`, unlimited)

@@ -104,7 +104,7 @@ Search output:
 Flags:
 - `--output-dir <path>` default: `.` (cwd)
 - `--tmp-dir <path>` default: `<output-dir>/.vimm.tmp`
-- `-c, --concurrency <n>` default: 4
+- `-c, --concurrency <n>` default: 1
 - `--retries <n>` default: 5
 - `--retry-backoff <linear|exponential>` default: `exponential` (with jitter)
 - `--timeout <duration>` default: `60s`

@@ -43,7 +43,7 @@ SELECTION FLAGS:
 DOWNLOAD FLAGS:
   --output-dir <path>           Output directory (default: .)
   --tmp-dir <path>              Temp directory (default: <output-dir>/.vimm.tmp)
-  -c, --concurrency <n>          Concurrent downloads (default: 4)
+  -c, --concurrency <n>          Concurrent downloads (default: 1)
   --retries <n>                 Retry count (default: 5)
   --retry-backoff <linear|exponential>  Retry strategy (default: exponential)
   --timeout <duration>          Per-request timeout (default: 60s)
@@ -151,7 +151,7 @@ func runDownload(cfg *Config, args []string) int {
 	if runtimeCfg.OutputDir != nil && *runtimeCfg.OutputDir != "" {
 		outputDirDefault = *runtimeCfg.OutputDir
 	}
-	concurrencyDefault := 4
+	concurrencyDefault := 1
 	if runtimeCfg.Concurrency != nil {
 		concurrencyDefault = *runtimeCfg.Concurrency
 	}
