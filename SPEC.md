@@ -139,8 +139,9 @@ Behavior:
 
 ## `--all` Completion Check
 When `--all` is used:
-- Compare total verified files (existing + newly downloaded) to the system’s reported title count.
-  - If region/variant filters are active, the system count comparison is skipped.
+- Compare total verified files (existing + newly downloaded) to the expected count.
+  - If no filters are active, expected count comes from the system’s reported title count.
+  - If region/variant filters are active, expected count is the number of eligible titles after filtering.
 
 Flags:
 - `--count-check` (default: true)

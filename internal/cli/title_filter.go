@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"regexp"
 	"strings"
@@ -86,7 +87,10 @@ func filterSearchResults(ctx context.Context, client *vault.Client, results []va
 	skipped := 0
 	for _, entry := range results {
 		displayTitle, err := resolveLatestMediaTitle(ctx, client, entry.ID)
-		if err == nil && displayTitle != "" {
+		if err != nil {
+			return nil, fmt.Errorf("fetch rom %d: %w", entry.ID, err)
+		}
+		if displayTitle != "" {
 			entry.Title = displayTitle
 		}
 		if !matchesRegion(entry.Title, filters.Region) {

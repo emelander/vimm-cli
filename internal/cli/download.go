@@ -306,6 +306,16 @@ func runDownload(cfg *Config, args []string) int {
 	filtersActive := filters.Region != "" || !filters.IncludeAllTags
 	applyFilters := filtersActive && (query != "" || all)
 
+	if all && applyFilters {
+		filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
+		if err != nil {
+			printError(os.Stderr, err)
+			return exitNetwork
+		}
+		entries = filtered
+		expectedCount = len(filtered)
+	}
+
 	if all && countCheck && !applyFilters {
 		if expectedCount == 0 {
 			if strictCount {
@@ -320,7 +330,7 @@ func runDownload(cfg *Config, args []string) int {
 
 	if dryRun {
 		entriesForOutput := entries
-		if applyFilters {
+		if applyFilters && !all {
 			filtered, err := filterSearchResults(ctx, client, entries, filters, 0, -1)
 			if err != nil {
 				printError(os.Stderr, err)
@@ -461,7 +471,7 @@ func runDownload(cfg *Config, args []string) int {
 		}
 		return exitPartial
 	}
-	if all && countCheck && expectedCount > 0 && !allowMismatch && !applyFilters {
+	if all && countCheck && expectedCount > 0 && !allowMismatch {
 		completed := verified
 		if !verify {
 			completed = downloaded + skipped
