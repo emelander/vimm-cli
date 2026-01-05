@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -53,6 +54,7 @@ DOWNLOAD FLAGS:
 VERSION FLAGS:
   --latest                      Prefer latest revision (default: true)
   --revision <value>            Override latest (e.g., rev2 or 2021-05-01)
+  --variant <standard|alt|alt2> Download format variant (default: standard)
 
 VERIFICATION FLAGS:
   --verify                      Verify CRC/MD5/SHA1 (default: true)
@@ -84,6 +86,8 @@ type downloadOptions struct {
 	Revision     string
 	DryRun       bool
 	RefererBase  string
+	Variant      string
+	Alt          int
 }
 
 type downloadResult struct {
@@ -115,6 +119,7 @@ func runDownload(cfg *Config, args []string) int {
 		dryRun        bool
 		latest        bool
 		revision      string
+		variant       string
 		verify        bool
 		skipVerify    bool
 		strictHashes  bool
@@ -177,6 +182,7 @@ func runDownload(cfg *Config, args []string) int {
 
 	fs.BoolVar(&latest, "latest", true, "prefer latest")
 	fs.StringVar(&revision, "revision", "", "revision override")
+	fs.StringVar(&variant, "variant", "standard", "download variant")
 
 	fs.BoolVar(&verify, "verify", true, "verify hashes")
 	fs.BoolVar(&skipVerify, "skip-verify", false, "skip verification")
@@ -201,6 +207,10 @@ func runDownload(cfg *Config, args []string) int {
 	}
 
 	if err := validateMatch(match); err != nil {
+		printError(os.Stderr, err)
+		return exitUsage
+	}
+	if err := validateVariant(variant); err != nil {
 		printError(os.Stderr, err)
 		return exitUsage
 	}
@@ -235,6 +245,12 @@ func runDownload(cfg *Config, args []string) int {
 	}
 	if revision != "" {
 		latest = false
+	}
+	variant = normalizeVariant(variant)
+	altVariant, err := variantAlt(variant)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitUsage
 	}
 
 	if concurrency < 1 {
@@ -340,6 +356,8 @@ func runDownload(cfg *Config, args []string) int {
 		Revision:     revision,
 		DryRun:       dryRun,
 		RefererBase:  client.BaseURL,
+		Variant:      variant,
+		Alt:          altVariant,
 	}
 
 	jobs := make(chan vault.ROMEntry)
@@ -563,7 +581,7 @@ func downloadOne(ctx context.Context, client *vault.Client, httpClient *http.Cli
 
 	var verifyFailed bool
 	attempt := func() error {
-		path, err := downloadZip(ctx, httpClient, limiter, referer, media, outputPath, opts.TmpDir, opts.Resume)
+		path, err := downloadZip(ctx, httpClient, limiter, referer, media, outputPath, opts.TmpDir, opts.Resume, opts.Alt)
 		if err != nil {
 			return err
 		}
@@ -591,22 +609,22 @@ func prepareMedia(ctx context.Context, client *vault.Client, id int, opts downlo
 	if err != nil {
 		return vault.Media{}, vault.Hashes{}, "", "", err
 	}
-	selected, err := selectMedia(mediaList, opts.Latest, opts.Revision)
+	selected, err := selectMedia(mediaList, opts.Latest, opts.Revision, opts.Variant)
 	if err != nil {
 		return vault.Media{}, vault.Hashes{}, "", "", err
 	}
 	return selected, selected.ExpectedHashes(), fmt.Sprintf("%s/%d", opts.RefererBase, id), selected.DecodedTitle(), nil
 }
 
-func selectMedia(media []vault.Media, latest bool, revision string) (vault.Media, error) {
+func selectMedia(media []vault.Media, latest bool, revision string, variant string) (vault.Media, error) {
 	available := make([]vault.Media, 0, len(media))
 	for _, item := range media {
-		if item.ZippedAvailable() {
+		if item.DownloadAvailable(variant) {
 			available = append(available, item)
 		}
 	}
 	if len(available) == 0 {
-		return vault.Media{}, fmt.Errorf("no downloadable media found")
+		return vault.Media{}, fmt.Errorf("no downloadable media found for variant %q", variant)
 	}
 
 	if revision != "" {
@@ -723,6 +741,27 @@ func compareVersion(a, b version) int {
 	return 0
 }
 
+func normalizeVariant(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "standard"
+	}
+	return value
+}
+
+func variantAlt(value string) (int, error) {
+	switch normalizeVariant(value) {
+	case "standard":
+		return 0, nil
+	case "alt":
+		return 1, nil
+	case "alt2":
+		return 2, nil
+	default:
+		return 0, fmt.Errorf("invalid --variant value: %s", value)
+	}
+}
+
 func parseMediaDate(media vault.Media) (time.Time, bool) {
 	if media.GoodDate == nil || media.GoodDate.Date == "" {
 		return time.Time{}, false
@@ -771,14 +810,19 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer string, media vault.Media, outputPath, tmpDir string, resume bool) (string, error) {
+func downloadZip(ctx context.Context, httpClient *http.Client, limiter *rateLimiter, referer string, media vault.Media, outputPath, tmpDir string, resume bool, alt int) (string, error) {
 	if limiter != nil {
 		if err := limiter.Wait(ctx); err != nil {
 			return outputPath, err
 		}
 	}
 
-	url := fmt.Sprintf("https://dl2.vimm.net/?mediaId=%d", media.ID)
+	params := url.Values{}
+	params.Set("mediaId", strconv.Itoa(media.ID))
+	if alt > 0 {
+		params.Set("alt", strconv.Itoa(alt))
+	}
+	url := "https://dl2.vimm.net/?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return outputPath, err

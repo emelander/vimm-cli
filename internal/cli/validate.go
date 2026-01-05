@@ -20,3 +20,12 @@ func validateClass(value string) error {
 	}
 	return fmt.Errorf("invalid --class value: %s", value)
 }
+
+func validateVariant(value string) error {
+	switch value {
+	case "", "standard", "alt", "alt2":
+		return nil
+	default:
+		return fmt.Errorf("invalid --variant value: %s", value)
+	}
+}

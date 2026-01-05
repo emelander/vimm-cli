@@ -36,6 +36,9 @@ go install github.com/emelander/vimm-download/cmd/vimm@latest
 # Download all ROMs for a system (confirmation required)
 ./vimm download --system N64 --all
 
+# Download an alternate variant when available
+./vimm download --system N64 --query "*mario*" --variant alt
+
 # Verify local files
 ./vimm verify --system N64 --output-dir ./roms --query "*fox*"
 ```

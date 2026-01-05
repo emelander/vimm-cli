@@ -75,6 +75,19 @@ func (m Media) ZippedAvailable() bool {
 	return parseNumeric(m.Zipped) > 0
 }
 
+func (m Media) DownloadAvailable(variant string) bool {
+	switch strings.ToLower(strings.TrimSpace(variant)) {
+	case "", "standard":
+		return parseNumeric(m.Zipped) > 0
+	case "alt":
+		return parseNumeric(m.AltZipped) > 0
+	case "alt2":
+		return parseNumeric(m.AltZipped2) > 0
+	default:
+		return parseNumeric(m.Zipped) > 0
+	}
+}
+
 func parseNumeric(value string) int {
 	value = strings.TrimSpace(value)
 	if value == "" {
