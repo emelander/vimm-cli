@@ -565,7 +565,7 @@ func newSpinner(logger *downloadLogger, prefix string, total int) *spinner {
 		writer:  os.Stderr,
 		prefix:  strings.TrimSpace(prefix),
 		total:   total,
-		frames:  []string{"-", "\\", "|", "/"},
+		frames:  []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 		enabled: true,
 	}
 }
