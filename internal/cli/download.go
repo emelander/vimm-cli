@@ -307,7 +307,7 @@ func runDownload(cfg *Config, args []string) int {
 	applyFilters := filtersActive && (query != "" || all)
 
 	if all && applyFilters {
-		spinner := newSpinner(logger, fmt.Sprintf("filtering titles for region/variants"), len(entries))
+		spinner := newSpinner(logger, "filtering titles for region/variants", len(entries))
 		progressFn := func(done, total int) {
 			if spinner != nil {
 				spinner.Update(done, "")
