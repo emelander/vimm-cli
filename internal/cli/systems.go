@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"sort"
+
+	"vimm-download/internal/vault"
 )
 
 const systemsUsage = `vimm systems - list available systems
@@ -42,7 +47,47 @@ func runSystems(cfg *Config, args []string) int {
 		return exitUsage
 	}
 
-	_ = cfg
-	fmt.Fprintln(os.Stderr, "systems: not implemented yet")
-	return exitGeneric
+	client := vault.NewClient(resolveBaseURL())
+	ctx := context.Background()
+	systems, err := client.Systems(ctx)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitNetwork
+	}
+
+	if class != "" {
+		filtered := make([]vault.System, 0, len(systems))
+		for _, sys := range systems {
+			if sys.Class == class {
+				filtered = append(filtered, sys)
+			}
+		}
+		systems = filtered
+	}
+
+	for i := range systems {
+		count, err := client.SystemCount(ctx, systems[i].Slug)
+		if err == nil {
+			systems[i].Titles = count
+		}
+	}
+
+	sort.Slice(systems, func(i, j int) bool {
+		return systems[i].Name < systems[j].Name
+	})
+
+	if cfg.JSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(systems); err != nil {
+			printError(os.Stderr, err)
+			return exitGeneric
+		}
+		return exitOK
+	}
+
+	for _, sys := range systems {
+		fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%d\n", sys.Slug, sys.Name, sys.Class, sys.Titles)
+	}
+	return exitOK
 }

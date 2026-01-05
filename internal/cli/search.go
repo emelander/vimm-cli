@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"sort"
+
+	"vimm-download/internal/vault"
 )
 
 const searchUsage = `vimm search - search ROMs by name pattern
@@ -80,7 +84,86 @@ func runSearch(cfg *Config, args []string) int {
 		return exitUsage
 	}
 
-	_ = cfg
-	fmt.Fprintln(os.Stderr, "search: not implemented yet")
-	return exitGeneric
+	matcher, err := newMatcher(match, query)
+	if err != nil {
+		printError(os.Stderr, fmt.Errorf("invalid matcher: %w", err))
+		return exitUsage
+	}
+
+	client := vault.NewClient(resolveBaseURL())
+	ctx := context.Background()
+
+	systems, err := resolveSystemsForSearch(ctx, client, system, class)
+	if err != nil {
+		printError(os.Stderr, err)
+		return exitNetwork
+	}
+
+	searchQuery := queryHint(query, match)
+	if searchQuery == "" {
+		searchQuery = query
+	}
+
+	var results []vault.ROMEntry
+	for _, sys := range systems {
+		entries, err := client.Search(ctx, sys.Slug, searchQuery)
+		if err != nil {
+			printError(os.Stderr, err)
+			return exitNetwork
+		}
+		for _, entry := range entries {
+			ok, err := matcher.Match(entry.Title)
+			if err != nil {
+				printError(os.Stderr, err)
+				return exitUsage
+			}
+			if ok {
+				results = append(results, entry)
+			}
+		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].System == results[j].System {
+			return results[i].Title < results[j].Title
+		}
+		return results[i].System < results[j].System
+	})
+
+	if offset > 0 {
+		if offset >= len(results) {
+			results = nil
+		} else {
+			results = results[offset:]
+		}
+	}
+	if limit >= 0 && limit < len(results) {
+		results = results[:limit]
+	}
+
+	if err := outputSearchResults(cfg, results); err != nil {
+		printError(os.Stderr, err)
+		return exitGeneric
+	}
+	return exitOK
+}
+
+func resolveSystemsForSearch(ctx context.Context, client *vault.Client, system, class string) ([]vault.System, error) {
+	if system != "" {
+		return []vault.System{{Slug: system}}, nil
+	}
+	systems, err := client.Systems(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if class == "" {
+		return systems, nil
+	}
+	filtered := make([]vault.System, 0, len(systems))
+	for _, sys := range systems {
+		if sys.Class == class {
+			filtered = append(filtered, sys)
+		}
+	}
+	return filtered, nil
 }
